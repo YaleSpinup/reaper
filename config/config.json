@@ -1,0 +1,20 @@
+{ 
+  "searchEngine": {
+    "endpoint": "https://127.0.0.1:9200/resources/server",
+    "timeout": "60s"
+  },
+  "filters": {
+    "tagKeyValues": {
+      "yale:subsidized": ["true"],
+      "yale:renewed_at": []
+    }
+  },
+  "schedule": {
+    "notify": "7d",
+    "decom": "30d",
+    "reap": "32d"
+  },
+  "orgs": ["ftstst"],
+  "interval": "30s",  
+  "logLevel": "debug"
+}

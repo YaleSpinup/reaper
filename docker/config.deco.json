@@ -1,0 +1,20 @@
+{ 
+  "searchEngine": {
+    "endpoint": "{{ .api_elasticsearch_endpoint }}",
+    "timeout": "60s"
+  },
+  "filters": {
+    "tagKeyValues": {
+      "yale:subsidized": ["true"],
+      "yale:renewed_at": []
+    }
+  },
+  "schedule": {
+    "notify": "{{ .notify_sched }}",
+    "decom": "{{ .decom_sched }}",
+    "reap": "{{ .reap_sched }}"
+  },
+  "logLevel": "info",
+  "orgs": {{ .server_org_list }},
+  "interval": "{{ .reap_interval }}"
+}
