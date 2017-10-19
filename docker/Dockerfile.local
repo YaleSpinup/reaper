@@ -1,0 +1,14 @@
+# build stage
+FROM golang:alpine AS build-env
+WORKDIR /go
+ENV GOPATH=/go
+ADD . /go/src/git.yale.edu/spinup/reaper/
+RUN go build -o reaper src/git.yale.edu/spinup/reaper/main.go
+
+# final stage
+FROM alpine
+RUN apk add --no-cache ca-certificates
+WORKDIR /app
+COPY --from=build-env /go/reaper /app/reaper
+EXPOSE 80
+ENTRYPOINT ["./reaper"]
