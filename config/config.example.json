@@ -3,18 +3,22 @@
     "endpoint": "https://127.0.0.1:9200/resources/server",
     "timeout": "60s"
   },
-  "filters": {
+  "filter": {
     "tagKeyValues": {
       "yale:subsidized": ["true"],
       "yale:renewed_at": []
     }
   },
-  "schedule": {
-    "notify": "7d",
-    "decom": "30d",
-    "reap": "32d"
+  "notifier": {
+    "schedule": ["21d","29d"]
+  },
+  "decommissioner": {
+    "schedule": "30d"
+  },
+  "destroyer": {
+    "schedule": "32d"
   },
   "orgs": ["ftstst"],
-  "interval": "30s",  
+  "interval": "10s",
   "logLevel": "debug"
 }
