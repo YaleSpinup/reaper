@@ -1,7 +1,6 @@
 { 
   "searchEngine": {
-    "endpoint": "https://127.0.0.1:9200/resources/server",
-    "timeout": "60s"
+    "endpoint": "https://127.0.0.1:9200"
   },
   "filter": {
     "tagKeyValues": {
@@ -9,16 +8,19 @@
       "yale:renewed_at": []
     }
   },
-  "notifier": {
-    "schedule": ["21d","29d"]
+  "notify": {
+    "age": [
+      "23d",
+      "29d"
+    ]
   },
-  "decommissioner": {
-    "schedule": "30d"
+  "decommission": {
+    "age": "30d"
   },
-  "destroyer": {
-    "schedule": "32d"
+  "destroy": {
+    "age": "44d"
   },
   "orgs": ["ftstst"],
-  "interval": "10s",
-  "logLevel": "debug"
+  "interval": "120s",
+  "logLevel": "info"
 }
