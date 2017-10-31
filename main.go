@@ -209,12 +209,13 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		gt := fmt.Sprintf("now-%s", older)
 		log.Debugf("%s >= renewed_at > %s", lte, gt)
 
-		resources, err := finder.DoDateRangeQuery(search.DateRangeQuery{
-			Index:  "resources",
-			Field:  "yale:renewed_at",
-			Format: "YYYY/MM/dd HH:mm:ss",
-			Lte:    lte,
-			Gt:     gt,
+		resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
+			Index:      "resources",
+			Field:      "yale:renewed_at",
+			Format:     "YYYY/MM/dd HH:mm:ss",
+			Lte:        lte,
+			Gt:         gt,
+			TermFilter: config.Filter,
 		})
 
 		if err != nil {
@@ -249,12 +250,13 @@ func runDecommissioner(config common.Config, wg *sync.WaitGroup) {
 	gt := fmt.Sprintf("now-%s", older)
 	log.Debugf("%s >= renewed_at > %s", lte, gt)
 
-	resources, err := finder.DoDateRangeQuery(search.DateRangeQuery{
-		Index:  "resources",
-		Field:  "yale:renewed_at",
-		Format: "YYYY/MM/dd HH:mm:ss",
-		Lte:    lte,
-		Gt:     gt,
+	resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
+		Index:      "resources",
+		Field:      "yale:renewed_at",
+		Format:     "YYYY/MM/dd HH:mm:ss",
+		Lte:        lte,
+		Gt:         gt,
+		TermFilter: config.Filter,
 	})
 
 	if err != nil {
@@ -289,11 +291,12 @@ func runDestroyer(config common.Config, wg *sync.WaitGroup) {
 	lte := fmt.Sprintf("now-%s", newer)
 	log.Debugf("%s >= renewed_at", lte)
 
-	resources, err := finder.DoDateRangeQuery(search.DateRangeQuery{
-		Index:  "resources",
-		Field:  "yale:renewed_at",
-		Format: "YYYY/MM/dd HH:mm:ss",
-		Lte:    lte,
+	resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
+		Index:      "resources",
+		Field:      "yale:renewed_at",
+		Format:     "YYYY/MM/dd HH:mm:ss",
+		Lte:        lte,
+		TermFilter: config.Filter,
 	})
 
 	if err != nil {

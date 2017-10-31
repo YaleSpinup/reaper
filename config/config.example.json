@@ -3,10 +3,8 @@
     "endpoint": "https://127.0.0.1:9200"
   },
   "filter": {
-    "tagKeyValues": {
-      "yale:subsidized": ["true"],
-      "yale:renewed_at": []
-    }
+    "yale:subsidized": "true",
+    "yale:org": "fts"
   },
   "notify": {
     "age": [

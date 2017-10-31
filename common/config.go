@@ -11,18 +11,13 @@ import (
 // Config is representation of the configuration data
 type Config struct {
 	SearchEngine map[string]string
-	Filter       Filter
+	Filter       map[string]string
 	LogLevel     string
 	Orgs         []string
 	Interval     string
 	Notify       Notifier
 	Decommission Decommissioner
 	Destroy      Destroyer
-}
-
-// Filter defines a set of positive matches for things to search
-type Filter struct {
-	TagKeyValues map[string][]string
 }
 
 // Notifier configures the notification process

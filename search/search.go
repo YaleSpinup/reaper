@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"git.yale.edu/spinup/reaper/common"
@@ -18,16 +19,16 @@ type Finder struct {
 // DateRangeQuery is all of the properties for executing a date range
 // query in our Resource Finder
 type DateRangeQuery struct {
-	Index  string
-	Field  string
-	Gt     string
-	Gte    string
-	Lt     string
-	Lte    string
-	Format string
-	To     string
-	From   string
-	Filter map[string]string
+	Index      string
+	Field      string
+	Gt         string
+	Gte        string
+	Lt         string
+	Lte        string
+	Format     string
+	To         string
+	From       string
+	TermFilter map[string]string
 }
 
 // NewFinder creates a new elasticsearch finder.  It doesn't currently allow for
@@ -68,18 +69,18 @@ func NewFinder(config *common.Config) (*Finder, error) {
 }
 
 // DoDateRangeQuery searches elasticsearch for a date range
-func (f *Finder) DoDateRangeQuery(drq DateRangeQuery) ([]*Resource, error) {
+func (f *Finder) DoDateRangeQuery(drq *DateRangeQuery) ([]*Resource, error) {
 	var resourceList []*Resource
 	log.Debugf("Client status: %s", f.Client.String())
 
-	rangeQuery, err := contructRangeQuery(&drq)
+	q, err := drq.constructBoolQuery()
 	if err != nil {
 		log.Errorln("Failed to construct date range query", err)
 		return nil, err
 	}
 
 	// execute search on index
-	searchResult, err := f.Client.Search().Index(drq.Index).Query(rangeQuery).Do(context.Background())
+	searchResult, err := f.Client.Search().Index(drq.Index).Query(q).Do(context.Background())
 	if err != nil {
 		log.Errorln("Failed to execute search", err)
 		return nil, err
@@ -112,7 +113,7 @@ func (f *Finder) DoDateRangeQuery(drq DateRangeQuery) ([]*Resource, error) {
 }
 
 // constructRangeQuery puts the query together from the given properties
-func contructRangeQuery(drq *DateRangeQuery) (*elastic.RangeQuery, error) {
+func (drq *DateRangeQuery) contructRangeQuery() (elastic.Query, error) {
 	// create a new range query
 	rangeQuery := elastic.NewRangeQuery(drq.Field).Format(drq.Format)
 
@@ -157,4 +158,35 @@ func contructRangeQuery(drq *DateRangeQuery) (*elastic.RangeQuery, error) {
 	log.Debugf("Raw range query: %s", string(data))
 
 	return rangeQuery, nil
+}
+
+func (drq *DateRangeQuery) constructBoolQuery() (elastic.Query, error) {
+	boolQuery := elastic.NewBoolQuery()
+
+	rangeQuery, err := drq.contructRangeQuery()
+	if err != nil {
+		log.Errorln("Unable to contruct DateRangeQuery", err)
+		return nil, err
+	}
+
+	log.Debugln("Adding rangeQuery to boolean query")
+	boolQuery.Must(rangeQuery)
+
+	for term, value := range drq.TermFilter {
+		log.Debugf("Adding term filter (%s:%s) to boolean query", term, value)
+		keyword := fmt.Sprintf("%s.keyword", term)
+		tq := elastic.NewTermQuery(keyword, value)
+		boolQuery.Filter(tq)
+	}
+
+	src, _ := boolQuery.Source()
+	data, err := json.Marshal(src)
+	if err != nil {
+		log.Errorln("Unable to marshall boolQuery into JSON", err)
+		return nil, err
+	}
+
+	log.Debugf("Raw bool query: %s", string(data))
+
+	return boolQuery, nil
 }
