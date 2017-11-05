@@ -16,10 +16,8 @@ type Finder struct {
 	Client *elastic.Client
 }
 
-// DateRangeQuery is all of the properties for executing a date range
-// query in our Resource Finder
+// DateRangeQuery is the properties required for a date range query in the resource finder
 type DateRangeQuery struct {
-	Index      string
 	Field      string
 	Gt         string
 	Gte        string
@@ -28,7 +26,13 @@ type DateRangeQuery struct {
 	Format     string
 	To         string
 	From       string
-	TermFilter map[string]string
+	TermFilter []TermQuery
+}
+
+// TermQuery is the properties required for a term query in the resource finder
+type TermQuery struct {
+	Term  string
+	Value string
 }
 
 // NewFinder creates a new elasticsearch finder.  It doesn't currently allow for
@@ -68,19 +72,19 @@ func NewFinder(config *common.Config) (*Finder, error) {
 	return &finder, nil
 }
 
-// DoDateRangeQuery searches elasticsearch for a date range
-func (f *Finder) DoDateRangeQuery(drq *DateRangeQuery) ([]*Resource, error) {
+// DoDateRangeQuery searches elasticsearch for a variable number of date range queries
+func (f *Finder) DoDateRangeQuery(index string, drqs ...*DateRangeQuery) ([]*Resource, error) {
 	var resourceList []*Resource
 	log.Debugf("Client status: %s", f.Client.String())
 
-	q, err := drq.constructBoolQuery()
+	q, err := constructBoolQuery(drqs)
 	if err != nil {
 		log.Errorln("Failed to construct date range query", err)
 		return nil, err
 	}
 
 	// execute search on index
-	searchResult, err := f.Client.Search().Index(drq.Index).Query(q).Do(context.Background())
+	searchResult, err := f.Client.Search().Index(index).Query(q).Size(1000).Do(context.Background())
 	if err != nil {
 		log.Errorln("Failed to execute search", err)
 		return nil, err
@@ -113,7 +117,7 @@ func (f *Finder) DoDateRangeQuery(drq *DateRangeQuery) ([]*Resource, error) {
 }
 
 // constructRangeQuery puts the query together from the given properties
-func (drq *DateRangeQuery) contructRangeQuery() (elastic.Query, error) {
+func contructRangeQuery(drq *DateRangeQuery) elastic.Query {
 	// create a new range query
 	rangeQuery := elastic.NewRangeQuery(drq.Field).Format(drq.Format)
 
@@ -147,36 +151,23 @@ func (drq *DateRangeQuery) contructRangeQuery() (elastic.Query, error) {
 		rangeQuery.Lte(drq.Lte)
 	}
 
-	// marshall query as JSON string just so we can log it
-	src, _ := rangeQuery.Source()
-	data, err := json.Marshal(src)
-	if err != nil {
-		log.Errorln("Unable to marshall RangeQuery into JSON", err)
-		return nil, err
-	}
-
-	log.Debugf("Raw range query: %s", string(data))
-
-	return rangeQuery, nil
+	return rangeQuery
 }
 
-func (drq *DateRangeQuery) constructBoolQuery() (elastic.Query, error) {
+func constructBoolQuery(drqs []*DateRangeQuery) (elastic.Query, error) {
 	boolQuery := elastic.NewBoolQuery()
 
-	rangeQuery, err := drq.contructRangeQuery()
-	if err != nil {
-		log.Errorln("Unable to contruct DateRangeQuery", err)
-		return nil, err
-	}
+	for _, drq := range drqs {
+		rangeQuery := contructRangeQuery(drq)
 
-	log.Debugln("Adding rangeQuery to boolean query")
-	boolQuery.Must(rangeQuery)
+		log.Debugln("Adding rangeQuery to boolean query")
+		boolQuery.Must(rangeQuery)
 
-	for term, value := range drq.TermFilter {
-		log.Debugf("Adding term filter (%s:%s) to boolean query", term, value)
-		keyword := fmt.Sprintf("%s.keyword", term)
-		tq := elastic.NewTermQuery(keyword, value)
-		boolQuery.Filter(tq)
+		for _, tq := range drq.TermFilter {
+			log.Debugf("Adding term filter (%s:%s) to boolean query", tq.Term, tq.Value)
+			keyword := fmt.Sprintf("%s.keyword", tq.Term)
+			boolQuery.Filter(elastic.NewTermQuery(keyword, tq.Value))
+		}
 	}
 
 	src, _ := boolQuery.Source()

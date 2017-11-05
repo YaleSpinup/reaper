@@ -22,17 +22,23 @@ type Config struct {
 
 // Notifier configures the notification process
 type Notifier struct {
-	Age []string
+	Age      []string
+	Endpoint string
+	Token    string
 }
 
 // Decommissioner configures the decom process
 type Decommissioner struct {
-	Age string
+	Age      string
+	Endpoint string
+	Token    string
 }
 
 // Destroyer configures the deletion process
 type Destroyer struct {
-	Age string
+	Age      string
+	Endpoint string
+	Token    string
 }
 
 // ReadConfig decodes the configuration from an io Reader
