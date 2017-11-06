@@ -1,6 +1,7 @@
-{ 
+{
+  "listen": ":8080",
   "searchEngine": {
-    "endpoint": "https://127.0.0.1:9200"
+    "endpoint": "http://127.0.0.1:9200"
   },
   "filter": {
     "yale:subsidized": "true",
@@ -26,5 +27,6 @@
   },
   "orgs": ["ftstst"],
   "interval": "120s",
-  "logLevel": "info"
+  "logLevel": "info",
+  "token": "super-sekret-token"
 }

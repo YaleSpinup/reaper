@@ -10,6 +10,7 @@ import (
 
 // Config is representation of the configuration data
 type Config struct {
+	Listen       string
 	SearchEngine map[string]string
 	Filter       map[string]string
 	LogLevel     string
@@ -18,6 +19,7 @@ type Config struct {
 	Notify       Notifier
 	Decommission Decommissioner
 	Destroy      Destroyer
+	Token        string
 }
 
 // Notifier configures the notification process

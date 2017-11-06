@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Version is the main version number
@@ -34,6 +36,11 @@ var (
 )
 
 type BySchedule []string
+
+type RenewalSecret struct {
+	RenewedAt string `json:"renewed_at"`
+	Secret    string `json:"secret"`
+}
 
 func main() {
 	flag.Parse()
@@ -78,7 +85,7 @@ func main() {
 		log.Fatalln("Couldn't initialize schedule routines", err)
 	}
 
-	srv := startHTTPServer(cancel)
+	srv := startHTTPServer(cancel, config)
 
 	// Waitgroup waits for all goroutines to exit
 	globalWg.Wait()
@@ -141,7 +148,7 @@ func Start(ctx context.Context, config common.Config) error {
 }
 
 // startHTTPServer registers the api endpoints and starts the webserver listening
-func startHTTPServer(cancel func()) *http.Server {
+func startHTTPServer(cancel func(), config common.Config) *http.Server {
 	router := mux.NewRouter()
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +172,7 @@ func startHTTPServer(cancel func()) *http.Server {
 
 	srv := &http.Server{
 		Handler:      handlers.LoggingHandler(os.Stdout, router),
-		Addr:         "127.0.0.1:8080",
+		Addr:         config.Listen,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
@@ -193,10 +200,8 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		return
 	}
 
-	// reverse ages slice
 	ages := config.Notify.Age
 	lte := fmt.Sprintf("now-%s", ages[0])
-
 	log.Debugf("%s >= renewed_at", lte)
 
 	// Query for anything older than the oldest age with the configured filters and status created
@@ -232,20 +237,29 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		}
 		decomAt := renewedAt.Add(decomAge)
 
+		renewalLink, err := generateRenewalToken(r.RenewedAt, config.Token)
+		if err != nil {
+			log.Errorf("Failed to generate renewal token, %s", err.Error())
+			continue
+		}
+
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
 
 			err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
-				"netid":     r.CreatedBy,
-				"link":      "TBD",
-				"expire_on": decomAt.Format("2006/01/02 15:04:05"),
-				"fqdn":      r.FQDN,
+				"netid":      r.CreatedBy,
+				"link":       renewalLink,
+				"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
+				"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
+				"fqdn":       r.FQDN,
 			}).Notify()
 
 			if err != nil {
 				log.Errorf("Failed to notify, %s", err.Error())
 				continue
 			}
+
+			// TODO: update tag
 		} else {
 			// time of the last notification
 			notifiedAt, err := time.Parse("2006/01/02 15:04:05", r.NotifiedAt)
@@ -269,14 +283,15 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 				ageThresholdAt := renewedAt.Add(ageDuration)
 				log.Infof("%s crossed the %s age threshold at %s", r.ID, age, ageThresholdAt.String())
 
-				if notifiedAt.Before(ageThresholdAt) {
+				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
 					err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
-						"netid":     r.CreatedBy,
-						"link":      "TBD",
-						"expire_on": decomAt.Format("2006/01/02 15:04:05"),
-						"fqdn":      r.FQDN,
+						"netid":      r.CreatedBy,
+						"link":       renewalLink,
+						"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
+						"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
+						"fqdn":       r.FQDN,
 					}).Notify()
 
 					if err != nil {
@@ -284,6 +299,7 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 						continue
 					}
 
+					// TODO: update tag
 					// stop notifying if we matched
 					break
 				}
@@ -374,6 +390,26 @@ func runDestroyer(config common.Config, wg *sync.WaitGroup) {
 			log.Infof("%s is not in decom state (%s). Not proceeding with destruction", r.ID, r.Status)
 		}
 	}
+}
+
+func generateRenewalToken(renewedAt, secret string) (string, error) {
+	str, err := json.Marshal(RenewalSecret{
+		RenewedAt: renewedAt,
+		Secret:    secret,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	log.Debugf("Marshalled secret JSON string %s", str)
+
+	token, err := bcrypt.GenerateFromPassword([]byte(str), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	log.Debugln("Secret hash:", string(token))
+
+	return string(token), nil
 }
 
 // parseDuration parses durations of days, weeks and months (in the most simplistic way)
