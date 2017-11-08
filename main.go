@@ -188,8 +188,12 @@ func startHTTPServer(cancel func(), config common.Config) *http.Server {
 	return srv
 }
 
-// runNotifier runs the routine to search for resources with renewed_at dates
-// within a given range configured for notification.
+// runNotifier runs the routine to search for resources with renewed_at dates within a given range configured for notification.
+// If the age-based notification threshold is crossed and a notification hasn't been sent:
+// - Update the notified_at tag on the instance
+// - Bail on this resource and continue to the next if tagging fails
+// - Notify with a Notifier
+// - Rollback tag if the notification fails
 func runNotifier(config common.Config, wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Infoln("Launching Notifier...")
@@ -222,6 +226,11 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 	for _, r := range resources {
 		log.Debugf("Checking returned resource: %+v", r)
 
+		if r.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+			continue
+		}
+
 		// time of the last renewal
 		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
 		if err != nil {
@@ -246,7 +255,16 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
 
-			err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
+			err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+				"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
+			}).Tag()
+
+			if err != nil {
+				log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
+				continue
+			}
+
+			err := NewNotifier(config.Notify.Endpoint, config.Notify.Token, map[string]string{
 				"netid":      r.CreatedBy,
 				"link":       renewalLink,
 				"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
@@ -255,11 +273,18 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 			}).Notify()
 
 			if err != nil {
-				log.Errorf("Failed to notify, %s", err.Error())
+				log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
+
+				err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+					"yale:notified_at": "",
+				}).Tag()
+
+				if err != nil {
+					log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
+				}
+
 				continue
 			}
-
-			// TODO: update tag
 		} else {
 			// time of the last notification
 			notifiedAt, err := time.Parse("2006/01/02 15:04:05", r.NotifiedAt)
@@ -286,7 +311,16 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
+					err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+						"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
+					}).Tag()
+
+					if err != nil {
+						log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
+						continue
+					}
+
+					err := NewNotifier(config.Notify.Endpoint, config.Notify.Token, map[string]string{
 						"netid":      r.CreatedBy,
 						"link":       renewalLink,
 						"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
@@ -295,11 +329,17 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 					}).Notify()
 
 					if err != nil {
-						log.Errorf("Failed to notify, %s", err.Error())
-						continue
+						log.Errorf("Failed to notify.  Rolling back notified_at tag to %s. %s", r.NotifiedAt, err.Error())
+
+						err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+							"yale:notified_at": r.NotifiedAt,
+						}).Tag()
+
+						if err != nil {
+							log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
+						}
 					}
 
-					// TODO: update tag
 					// stop notifying if we matched
 					break
 				}
@@ -308,6 +348,8 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 			}
 		}
 	}
+
+	return
 }
 
 // runDecommissioner runs the routine to search for resources with renewed_at dates

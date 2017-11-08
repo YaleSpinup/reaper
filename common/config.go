@@ -19,6 +19,7 @@ type Config struct {
 	Notify       Notifier
 	Decommission Decommissioner
 	Destroy      Destroyer
+	Tagging      Tagging
 	Token        string
 }
 
@@ -39,6 +40,12 @@ type Decommissioner struct {
 // Destroyer configures the deletion process
 type Destroyer struct {
 	Age      string
+	Endpoint string
+	Token    string
+}
+
+// Tagging configures the tag update process
+type Tagging struct {
 	Endpoint string
 	Token    string
 }

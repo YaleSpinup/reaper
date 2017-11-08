@@ -10,16 +10,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Notification is the data object for notifying
-type Notification struct {
+// Notifier is the data object for notifying
+type Notifier struct {
 	Endpoint string
 	Token    string
 	Params   map[string]string
 }
 
-// NewNotification creates a new notification object with the given params
-func NewNotification(endpoint, token string, params map[string]string) *Notification {
-	return &Notification{
+// NewNotifier creates a new notification object with the given params
+func NewNotifier(endpoint, token string, params map[string]string) *Notifier {
+	return &Notifier{
 		Endpoint: endpoint,
 		Token:    token,
 		Params:   params,
@@ -27,10 +27,10 @@ func NewNotification(endpoint, token string, params map[string]string) *Notifica
 }
 
 // Notify sends the notification
-func (n *Notification) Notify() error {
+func (n *Notifier) Notify() error {
 	log.Debugf("Notifying with %+v", *n)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	data, err := json.Marshal(n.Params)
 	if err != nil {
 		return err
