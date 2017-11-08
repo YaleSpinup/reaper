@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -19,6 +20,7 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Version is the main version number
@@ -34,6 +36,11 @@ var (
 )
 
 type BySchedule []string
+
+type RenewalSecret struct {
+	RenewedAt string `json:"renewed_at"`
+	Secret    string `json:"secret"`
+}
 
 func main() {
 	flag.Parse()
@@ -78,7 +85,7 @@ func main() {
 		log.Fatalln("Couldn't initialize schedule routines", err)
 	}
 
-	srv := startHTTPServer(cancel)
+	srv := startHTTPServer(cancel, config)
 
 	// Waitgroup waits for all goroutines to exit
 	globalWg.Wait()
@@ -141,7 +148,7 @@ func Start(ctx context.Context, config common.Config) error {
 }
 
 // startHTTPServer registers the api endpoints and starts the webserver listening
-func startHTTPServer(cancel func()) *http.Server {
+func startHTTPServer(cancel func(), config common.Config) *http.Server {
 	router := mux.NewRouter()
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -165,7 +172,7 @@ func startHTTPServer(cancel func()) *http.Server {
 
 	srv := &http.Server{
 		Handler:      handlers.LoggingHandler(os.Stdout, router),
-		Addr:         ":8080",
+		Addr:         config.Listen,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
@@ -193,40 +200,112 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		return
 	}
 
-	// config.Notify.Age is pre-sorted from smaller duration to larger duration.
-	// The duration is subtracted from 'now', so smaller numbers are more recent than
-	// larger numbers. Therefore a resource with config.Notify.Age[n] is a newer resource
-	// one with config.Notify.Age[n+1].
-	for i, newer := range config.Notify.Age {
-		var older string
-		if len(config.Notify.Age) > i+1 {
-			older = config.Notify.Age[i+1]
-		} else {
-			older = config.Decommission.Age
-		}
+	ages := config.Notify.Age
+	lte := fmt.Sprintf("now-%s", ages[0])
+	log.Debugf("%s >= renewed_at", lte)
 
-		lte := fmt.Sprintf("now-%s", newer)
-		gt := fmt.Sprintf("now-%s", older)
-		log.Debugf("%s >= renewed_at > %s", lte, gt)
+	// Query for anything older than the oldest age with the configured filters and status created
+	termfilter := append(termFilters(config.Filter), search.TermQuery{Term: "status", Value: "created"})
+	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+		Field:      "yale:renewed_at",
+		Format:     "YYYY/MM/dd HH:mm:ss",
+		Lte:        lte,
+		TermFilter: termfilter,
+	})
 
-		resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
-			Index:      "resources",
-			Field:      "yale:renewed_at",
-			Format:     "YYYY/MM/dd HH:mm:ss",
-			Lte:        lte,
-			Gt:         gt,
-			TermFilter: config.Filter,
-		})
+	if err != nil {
+		log.Errorln("Failed to execute date range query", err)
+		return
+	}
 
+	// loop over the returned resources
+	for _, r := range resources {
+		log.Debugf("Checking returned resource: %+v", r)
+
+		// time of the last renewal
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
 		if err != nil {
-			log.Errorln("Failed to execute date range query", err)
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			continue
+		}
+		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
+
+		decomAge, err := parseDuration(config.Decommission.Age)
+		if err != nil {
+			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, config.Decommission.Age, err.Error())
 			return
 		}
+		decomAt := renewedAt.Add(decomAge)
 
-		log.Debugf("Got %d resource(s) from notify query for age %s", len(resources), newer)
+		renewalLink, err := generateRenewalToken(r.RenewedAt, config.Token)
+		if err != nil {
+			log.Errorf("Failed to generate renewal token, %s", err.Error())
+			continue
+		}
 
-		for _, r := range resources {
-			log.Infof("Notifying for resource ID %s on %s age", r.ID, newer)
+		if r.NotifiedAt == "" {
+			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
+
+			err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
+				"netid":      r.CreatedBy,
+				"link":       renewalLink,
+				"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
+				"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
+				"fqdn":       r.FQDN,
+			}).Notify()
+
+			if err != nil {
+				log.Errorf("Failed to notify, %s", err.Error())
+				continue
+			}
+
+			// TODO: update tag
+		} else {
+			// time of the last notification
+			notifiedAt, err := time.Parse("2006/01/02 15:04:05", r.NotifiedAt)
+			if err != nil {
+				log.Errorf("%s Couldn't parse notified_at (%s) as a time value. %s", r.ID, r.NotifiedAt, err.Error())
+				continue
+			}
+			log.Infof("%s last notified at %s", r.ID, notifiedAt.String())
+
+			// range over the ages and check if we've notified since the age threshold was crossed
+			for _, age := range ages {
+				log.Debugf("Checking for notification on age %s", age)
+
+				ageDuration, err := parseDuration(age)
+				if err != nil {
+					log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, age, err.Error())
+					continue
+				}
+
+				// time the age threshold was crossed
+				ageThresholdAt := renewedAt.Add(ageDuration)
+				log.Infof("%s crossed the %s age threshold at %s", r.ID, age, ageThresholdAt.String())
+
+				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
+					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
+
+					err := NewNotification(config.Notify.Endpoint, config.Notify.Token, map[string]string{
+						"netid":      r.CreatedBy,
+						"link":       renewalLink,
+						"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
+						"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
+						"fqdn":       r.FQDN,
+					}).Notify()
+
+					if err != nil {
+						log.Errorf("Failed to notify, %s", err.Error())
+						continue
+					}
+
+					// TODO: update tag
+					// stop notifying if we matched
+					break
+				}
+
+				log.Debugf("%s has been notified (%s) since crossing the %s age threshold (%s)", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
+			}
 		}
 	}
 }
@@ -250,13 +329,12 @@ func runDecommissioner(config common.Config, wg *sync.WaitGroup) {
 	gt := fmt.Sprintf("now-%s", older)
 	log.Debugf("%s >= renewed_at > %s", lte, gt)
 
-	resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
-		Index:      "resources",
+	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
 		Lte:        lte,
 		Gt:         gt,
-		TermFilter: config.Filter,
+		TermFilter: termFilters(config.Filter),
 	})
 
 	if err != nil {
@@ -291,12 +369,11 @@ func runDestroyer(config common.Config, wg *sync.WaitGroup) {
 	lte := fmt.Sprintf("now-%s", newer)
 	log.Debugf("%s >= renewed_at", lte)
 
-	resources, err := finder.DoDateRangeQuery(&search.DateRangeQuery{
-		Index:      "resources",
+	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
 		Lte:        lte,
-		TermFilter: config.Filter,
+		TermFilter: termFilters(config.Filter),
 	})
 
 	if err != nil {
@@ -313,6 +390,26 @@ func runDestroyer(config common.Config, wg *sync.WaitGroup) {
 			log.Infof("%s is not in decom state (%s). Not proceeding with destruction", r.ID, r.Status)
 		}
 	}
+}
+
+func generateRenewalToken(renewedAt, secret string) (string, error) {
+	str, err := json.Marshal(RenewalSecret{
+		RenewedAt: renewedAt,
+		Secret:    secret,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	log.Debugf("Marshalled secret JSON string %s", str)
+
+	token, err := bcrypt.GenerateFromPassword([]byte(str), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	log.Debugln("Secret hash:", string(token))
+
+	return string(token), nil
 }
 
 // parseDuration parses durations of days, weeks and months (in the most simplistic way)
@@ -362,4 +459,12 @@ func (s BySchedule) Less(i, j int) bool {
 	di, _ := parseDuration(s[i])
 	dj, _ := parseDuration(s[j])
 	return di < dj
+}
+
+func termFilters(filters map[string]string) []search.TermQuery {
+	var tqs []search.TermQuery
+	for key, value := range filters {
+		tqs = append(tqs, search.TermQuery{Term: key, Value: value})
+	}
+	return tqs
 }

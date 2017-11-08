@@ -1,6 +1,7 @@
-{ 
+{
+  "listen": ":8080",
   "searchEngine": {
-    "endpoint": "https://127.0.0.1:9200"
+    "endpoint": "http://127.0.0.1:9200"
   },
   "filter": {
     "yale:subsidized": "true",
@@ -10,15 +11,22 @@
     "age": [
       "23d",
       "29d"
-    ]
+    ],
+    "endpoint": "http://127.0.0.1:8888/v1/notify",
+    "token": "12345"
   },
   "decommission": {
-    "age": "30d"
+    "age": "30d",
+    "endpoint": "http://127.0.0.1:8888/v1/decom",
+    "token": "12345"
   },
   "destroy": {
-    "age": "44d"
+    "age": "44d",
+    "endpoint": "http://127.0.0.1:8888/v1/destroy",
+    "token": "12345"
   },
   "orgs": ["ftstst"],
   "interval": "120s",
-  "logLevel": "info"
+  "logLevel": "info",
+  "token": "super-sekret-token"
 }

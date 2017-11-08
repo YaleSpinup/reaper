@@ -10,6 +10,7 @@ import (
 
 // Config is representation of the configuration data
 type Config struct {
+	Listen       string
 	SearchEngine map[string]string
 	Filter       map[string]string
 	LogLevel     string
@@ -18,21 +19,28 @@ type Config struct {
 	Notify       Notifier
 	Decommission Decommissioner
 	Destroy      Destroyer
+	Token        string
 }
 
 // Notifier configures the notification process
 type Notifier struct {
-	Age []string
+	Age      []string
+	Endpoint string
+	Token    string
 }
 
 // Decommissioner configures the decom process
 type Decommissioner struct {
-	Age string
+	Age      string
+	Endpoint string
+	Token    string
 }
 
 // Destroyer configures the deletion process
 type Destroyer struct {
-	Age string
+	Age      string
+	Endpoint string
+	Token    string
 }
 
 // ReadConfig decodes the configuration from an io Reader
