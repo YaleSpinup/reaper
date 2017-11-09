@@ -255,9 +255,10 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
 
-			err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+			tagger := NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org)
+			err = tagger.Tag(map[string]string{
 				"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
-			}).Tag()
+			})
 
 			if err != nil {
 				log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
@@ -275,9 +276,9 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 			if err != nil {
 				log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
 
-				err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+				err = tagger.Tag(map[string]string{
 					"yale:notified_at": "",
-				}).Tag()
+				})
 
 				if err != nil {
 					log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
@@ -311,9 +312,10 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+					tagger := NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org)
+					err = tagger.Tag(map[string]string{
 						"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
-					}).Tag()
+					})
 
 					if err != nil {
 						log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
@@ -331,9 +333,9 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 					if err != nil {
 						log.Errorf("Failed to notify.  Rolling back notified_at tag to %s. %s", r.NotifiedAt, err.Error())
 
-						err = NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org, map[string]string{
+						err = tagger.Tag(map[string]string{
 							"yale:notified_at": r.NotifiedAt,
-						}).Tag()
+						})
 
 						if err != nil {
 							log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())

@@ -16,29 +16,27 @@ type Tagger struct {
 	Token      string
 	ResourceID string
 	Org        string
-	Tags       map[string]string
 }
 
 // NewTagger creates a new tagging object
-func NewTagger(endpoint, token, id, org string, tags map[string]string) *Tagger {
+func NewTagger(endpoint, token, id, org string) *Tagger {
 	return &Tagger{
 		Endpoint:   endpoint,
 		Token:      token,
 		ResourceID: id,
 		Org:        org,
-		Tags:       tags,
 	}
 }
 
 // Tag updates the tags
-func (t *Tagger) Tag() error {
-	log.Debugf("Tagging with %+v", *t)
+func (t *Tagger) Tag(tags map[string]string) error {
+	log.Debugf("Tagging with %+v and tags %+v", *t, tags)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	data, err := json.Marshal(struct {
 		Tags map[string]string `json:"tags"`
 	}{
-		Tags: t.Tags,
+		Tags: tags,
 	})
 	if err != nil {
 		return err
