@@ -11,4 +11,5 @@ type Resource struct {
 	RenewedAt  string `json:"yale:renewed_at, omitempty"`
 	NotifiedAt string `json:"yale:notified_at, omitempty"`
 	FQDN       string `json:"yale:fqdn, omitempty"`
+	Org        string `json:"yale:org, omitempty"`
 }
