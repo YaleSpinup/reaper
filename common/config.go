@@ -10,15 +10,16 @@ import (
 
 // Config is representation of the configuration data
 type Config struct {
-	Listen       string
-	SearchEngine map[string]string
-	Filter       map[string]string
-	LogLevel     string
-	Orgs         []string
-	Interval     string
-	Notify       Notifier
+	BaseURL      string
 	Decommission Decommissioner
 	Destroy      Destroyer
+	Filter       map[string]string
+	Interval     string
+	Listen       string
+	LogLevel     string
+	Notify       Notifier
+	Orgs         []string
+	SearchEngine map[string]string
 	Tagging      Tagging
 	Token        string
 }
@@ -30,15 +31,15 @@ type Notifier struct {
 	Token    string
 }
 
-// Decommissioner configures the decom process
-type Decommissioner struct {
+// Destroyer configures the deletion process
+type Destroyer struct {
 	Age      string
 	Endpoint string
 	Token    string
 }
 
-// Destroyer configures the deletion process
-type Destroyer struct {
+// Decommissioner configures the decom process
+type Decommissioner struct {
 	Age      string
 	Endpoint string
 	Token    string

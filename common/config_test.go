@@ -1,11 +1,89 @@
 package common
 
 import (
+	"bytes"
+	"reflect"
 	"testing"
 )
 
+var testConfig = []byte(
+	`{
+		"listen": "127.0.0.1:8080",
+		"searchEngine": {
+		  "endpoint": "http://127.0.0.1:9200"
+		},
+		"filter": {
+		  "yale:subsidized": "true"
+		},
+		"notify": {
+		  "age": [
+			"1d",
+			"20d",
+			"5d",
+			"25d"
+		  ],
+		  "endpoint": "http://127.0.0.1:8888/v1/notify",
+		  "token": "12345"
+		},
+		"decommission": {
+		  "age": "30d",
+		  "endpoint": "http://127.0.0.1:8888/v1/decom",
+		  "token": "12345"
+		},
+		"destroy": {
+		  "age": "44d",
+		  "endpoint": "http://127.0.0.1:8888/v1/destroy",
+		  "token": "12345"
+		},
+		"tagging": {
+		  "endpoint": "http://127.0.0.1:8888/v1/servers",
+		  "token": "12345"
+		},
+		"orgs": ["testorg"],
+		"interval": "15s",
+		"logLevel": "debug",
+		"baseUrl": "http://127.0.0.1:8080/v1/reaper",
+		"token": "54321"
+	  }`)
+
 func TestReadConfig(t *testing.T) {
-	if true != true {
-		t.Errorf("expected true to be true")
+	expectedConfig := Config{
+		BaseURL: "http://127.0.0.1:8080/v1/reaper",
+		Decommission: Decommissioner{
+			Age:      "30d",
+			Endpoint: "http://127.0.0.1:8888/v1/decom",
+			Token:    "12345",
+		},
+		Destroy: Destroyer{
+			Age:      "44d",
+			Endpoint: "http://127.0.0.1:8888/v1/destroy",
+			Token:    "12345",
+		},
+		Filter:   map[string]string{"yale:subsidized": "true"},
+		Interval: "15s",
+		Listen:   "127.0.0.1:8080",
+		LogLevel: "debug",
+		Notify: Notifier{
+			Age:      []string{"1d", "20d", "5d", "25d"},
+			Endpoint: "http://127.0.0.1:8888/v1/notify",
+			Token:    "12345",
+		},
+		Orgs:         []string{"testorg"},
+		SearchEngine: map[string]string{"endpoint": "http://127.0.0.1:9200"},
+		Tagging: Tagging{
+			Endpoint: "http://127.0.0.1:8888/v1/servers",
+			Token:    "12345",
+		},
+		Token: "54321",
+	}
+
+	actualConfig, err := ReadConfig(bytes.NewReader(testConfig))
+	if err != nil {
+		t.Error("Failed to read config", err)
+	}
+
+	if !reflect.DeepEqual(actualConfig, expectedConfig) {
+		t.Errorf("expected: %+v", expectedConfig)
+		t.Errorf("actual:   %+v", actualConfig)
 	}
 }

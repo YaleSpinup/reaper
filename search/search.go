@@ -35,6 +35,15 @@ type TermQuery struct {
 	Value string
 }
 
+// NewTermQueryList generates a new list of term queries from a map of strings to strings
+func NewTermQueryList(filters map[string]string) []TermQuery {
+	var tqs []TermQuery
+	for key, value := range filters {
+		tqs = append(tqs, TermQuery{Term: key, Value: value})
+	}
+	return tqs
+}
+
 // NewFinder creates a new elasticsearch finder.  It doesn't currently allow for
 // all possible elasticsearch settings, but only the ones we need.
 func NewFinder(config *common.Config) (*Finder, error) {
