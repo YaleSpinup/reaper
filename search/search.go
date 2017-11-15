@@ -81,6 +81,26 @@ func NewFinder(config *common.Config) (*Finder, error) {
 	return &finder, nil
 }
 
+// DoGet does the get of an ID and returns a resource
+func (f *Finder) DoGet(index, rtype, id string) (*Resource, error) {
+	// Do the needful get document
+	doc, err := elastic.NewGetService(f.Client).Index(index).Type(rtype).Id(id).Do(context.Background())
+	if err != nil {
+		log.Errorln("Failed to execute fetch from elasticsearch", err)
+		return nil, err
+	}
+
+	// Deserialize doc.Source into a Resource
+	var r Resource
+	err = json.Unmarshal(*doc.Source, &r)
+	if err != nil {
+		log.Errorln("Couldn't deserialize response from elasticsearch into resource", err)
+		return nil, err
+	}
+
+	return &r, nil
+}
+
 // DoDateRangeQuery searches elasticsearch for a variable number of date range queries
 func (f *Finder) DoDateRangeQuery(index string, drqs ...*DateRangeQuery) ([]*Resource, error) {
 	var resourceList []*Resource

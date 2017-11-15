@@ -3,8 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -19,7 +17,6 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // Version is the main version number
@@ -33,11 +30,6 @@ var (
 	version        = flag.Bool("version", false, "Display version information and exit.")
 	globalWg       sync.WaitGroup
 )
-
-type RenewalSecret struct {
-	RenewedAt string `json:"renewed_at"`
-	Secret    string `json:"secret"`
-}
 
 func main() {
 	flag.Parse()
@@ -99,6 +91,103 @@ func vers() {
 	os.Exit(0)
 }
 
+// startHTTPServer registers the api endpoints and starts the webserver listening
+func startHTTPServer(cancel func(), config common.Config) *http.Server {
+	router := mux.NewRouter()
+	api := router.PathPrefix("/v1").Subrouter()
+	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte{})
+			return
+		}
+		log.Debug("Got ping request, responding pong.")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
+
+	api.HandleFunc("/reaper/shutdown", func(w http.ResponseWriter, r *http.Request) {
+		log.Infoln("Received shutdown request, cancelling goroutines.")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+		cancel()
+		return
+	})
+
+	api.HandleFunc("/reaper/renew/{id:[A-Za-z0-9-]+}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "GET" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte{})
+			return
+		}
+
+		// Look for the token in the query
+		tokens, ok := r.URL.Query()["token"]
+		if !ok || len(tokens) != 1 {
+			log.Warnf("Token parameter is missing or of bad format for request: %s", r.URL)
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte{})
+			return
+		}
+
+		vars := mux.Vars(r)
+		id := vars["id"]
+		if id == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte{})
+			return
+		}
+
+		finder, err := search.NewFinder(&config)
+		if err != nil {
+			log.Errorln("Couldn't configure a new finder", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed connecting to elasticsearch"))
+			return
+		}
+
+		resource, err := finder.DoGet("resources", "server", id)
+		if err != nil {
+			log.Errorf("Couldn't get the %s resource from elasticsearch, %s", id, err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte("Failed getting details about resource"))
+			return
+		}
+
+		log.Debugf("Got resource %+v back from elasticsearch", resource)
+
+		renewalSecret := &RenewalSecret{RenewedAt: resource.RenewedAt, Secret: config.Token}
+		if err := renewalSecret.ValidateRenewalToken(tokens[0]); err != nil {
+			log.Warnf("Failed to validate token string %s, %s", tokens[0], err.Error())
+			w.WriteHeader(http.StatusForbidden)
+			w.Write([]byte{})
+			return
+		}
+
+		log.Infof("Renewing %s", vars["id"])
+
+		w.WriteHeader(http.StatusAccepted)
+		w.Write([]byte("ok"))
+	})
+
+	srv := &http.Server{
+		Handler:      handlers.LoggingHandler(os.Stdout, router),
+		Addr:         config.Listen,
+		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  30 * time.Second,
+	}
+
+	go func() {
+		log.Infof("Starting listener on :8080")
+		if err := srv.ListenAndServe(); err != nil {
+			log.Infof("Httpserver: ListenAndServe() error: %s", err)
+			log.Fatal(err)
+		}
+	}()
+
+	return srv
+}
+
 // Start fires up the batching routine loop which will do a search for each step;
 // Notify, Decommission, Destroy, and then execute those steps.
 func Start(ctx context.Context, config common.Config) error {
@@ -142,104 +231,6 @@ func Start(ctx context.Context, config common.Config) error {
 	}()
 
 	return nil
-}
-
-// startHTTPServer registers the api endpoints and starts the webserver listening
-func startHTTPServer(cancel func(), config common.Config) *http.Server {
-	router := mux.NewRouter()
-	api := router.PathPrefix("/v1").Subrouter()
-	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte{})
-			return
-		}
-		log.Debug("Got ping request, responding pong.")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("pong"))
-	})
-
-	api.HandleFunc("/reaper/shutdown", func(w http.ResponseWriter, r *http.Request) {
-		log.Infoln("Received shutdown request, cancelling goroutines.")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
-		cancel()
-		return
-	})
-
-	api.HandleFunc("/reaper/renew/{id}", func(w http.ResponseWriter, r *http.Request) {
-		// Look for the token in the query
-		tokens, ok := r.URL.Query()["token"]
-		if !ok || len(tokens) < 1 {
-			log.Warnf("Token parameter is missing for request: %s", r.URL)
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte{})
-			return
-		}
-
-		// Decode the base64 encoded token from the query parameters
-		token, err := base64.StdEncoding.DecodeString(tokens[0])
-		if err != nil {
-			log.Warnf("Failed to decode token string %s", tokens[0])
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte{})
-			return
-		}
-
-		vars := mux.Vars(r)
-		if r.Method == "GET" {
-			id := vars["id"]
-			if id == "" {
-				w.WriteHeader(http.StatusBadRequest)
-				w.Write([]byte{})
-				return
-			}
-
-			renewedAt := "somedate"
-			str, err := json.Marshal(RenewalSecret{
-				RenewedAt: renewedAt,
-				Secret:    config.Token,
-			})
-			if err != nil {
-				return
-			}
-
-			log.Debugf("Comparing marshalled secret JSON string %s to token string %s", str, token)
-
-			err = bcrypt.CompareHashAndPassword(token, str)
-			if err != nil {
-				log.Warnf("Failed to validate token string %s", token)
-				w.WriteHeader(http.StatusForbidden)
-				w.Write([]byte{})
-				return
-			}
-
-			log.Infof("Renewing %s", vars["id"])
-
-			w.WriteHeader(http.StatusAccepted)
-			w.Write([]byte("ok"))
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte{})
-		}
-	})
-
-	srv := &http.Server{
-		Handler:      handlers.LoggingHandler(os.Stdout, router),
-		Addr:         config.Listen,
-		WriteTimeout: 30 * time.Second,
-		ReadTimeout:  30 * time.Second,
-	}
-
-	go func() {
-		log.Infof("Starting listener on :8080")
-		if err := srv.ListenAndServe(); err != nil {
-			log.Infof("Httpserver: ListenAndServe() error: %s", err)
-			log.Fatal(err)
-		}
-	}()
-
-	return srv
 }
 
 // runNotifier runs the routine to search for resources with renewed_at dates within a given range configured for notification.
@@ -300,7 +291,11 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		}
 		decomAt := renewedAt.Add(decomAge)
 
-		token, err := generateRenewalToken(r.RenewedAt, config.Token)
+		renewalSecret := &RenewalSecret{
+			RenewedAt: r.RenewedAt,
+			Secret:    config.Token,
+		}
+		token, err := renewalSecret.GenerateRenewalToken()
 		if err != nil {
 			log.Errorf("Failed to generate renewal token, %s", err.Error())
 			continue
