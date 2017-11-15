@@ -1,20 +1,34 @@
-{ 
+{
+  "listen": ":8080",
   "searchEngine": {
-    "endpoint": "{{ .api_elasticsearch_endpoint }}",
-    "timeout": "60s"
+    "endpoint": "{{ .api_elasticsearch_endpoint }}"
   },
-  "filters": {
-    "tagKeyValues": {
-      "yale:subsidized": ["true"],
-      "yale:renewed_at": []
-    }
+  "filter": {
+    "yale:subsidized": "true",
+    "yale:org": "{{ .server_org }}"
   },
-  "schedule": {
-    "notify": "{{ .notify_sched }}",
-    "decom": "{{ .decom_sched }}",
-    "reap": "{{ .reap_sched }}"
+  "notify": {
+    "age": {{ .api_notify_ages }},
+    "endpoint": "{{ .api_notify_endpoint }}",
+    "token": "{{ .api_notify_token }}"
   },
-  "logLevel": "info",
-  "orgs": {{ .server_org_list }},
-  "interval": "{{ .reap_interval }}"
+  "decommission": {
+    "age": "{{ .api_decommission_age }}",
+    "endpoint": "{{ .api_decommission_endpoint }}",
+    "token": "{{ .api_decommission_token }}"
+  },
+  "destroy": {
+    "age": "{{ .api_destroy_age }}",
+    "endpoint": "{{ .api_destroy_endpoint }}",
+    "token": "{{ .api_destroy_token }}"
+  },
+  "tagging": {
+    "endpoint": "{{ .api_tagging_endpoint }}",
+    "token": "{{ .api_tagging_token }}"
+  },
+  "interval": "{{ .reap_interval }}",
+  "logLevel": "{{ .loglevel }}",
+  "baseUrl": "{{ .api_base_url }}",
+  "encryptionSecret": "{{ .api_encryption_secret }}"
 }
+  

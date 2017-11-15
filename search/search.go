@@ -135,7 +135,7 @@ func (f *Finder) DoDateRangeQuery(index string, drqs ...*DateRangeQuery) ([]*Res
 				log.Errorln("Couldn't deserialize response from elasticsearch into resource", err)
 				continue
 			}
-
+			r.ID = hit.Id
 			resourceList = append(resourceList, &r)
 		}
 	} else {

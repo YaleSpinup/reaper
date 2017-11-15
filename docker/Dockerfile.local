@@ -3,7 +3,7 @@ FROM golang:alpine AS build-env
 WORKDIR /go
 ENV GOPATH=/go
 ADD . /go/src/git.yale.edu/spinup/reaper/
-RUN go build -o reaper src/git.yale.edu/spinup/reaper/main.go
+RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
 
 # final stage
 FROM alpine

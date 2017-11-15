@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -41,11 +42,20 @@ func (n *Notifier) Notify(params map[string]string) error {
 		return err
 	}
 
-	req.Header.Set("Auth-Token", n.Token)
+	req.Header.Set("Auth-token", n.Token)
+	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
 		return err
 	}
+
+	defer res.Body.Close()
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		log.Warnf("Couldn't read response body: %s", err.Error())
+	}
+
+	log.Debugf("Got %d response from %s with body: %s", res.StatusCode, n.Endpoint, body)
 
 	if res.StatusCode > 299 {
 		return fmt.Errorf("Got a non-success http response from http POST to %s, %d", n.Endpoint, res.StatusCode)

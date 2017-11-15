@@ -29,6 +29,9 @@ var (
 	configFileName = flag.String("config", "config/config.json", "Configuration file.")
 	version        = flag.Bool("version", false, "Display version information and exit.")
 	globalWg       sync.WaitGroup
+
+	// AppConfig is the global applicatoin configuration
+	AppConfig common.Config
 )
 
 func main() {
@@ -49,9 +52,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Unable to read configuration from %s.  %+v", *configFileName, err)
 	}
+	AppConfig = config
 
 	// Set the loglevel, info if it's unset
-	switch config.LogLevel {
+	switch AppConfig.LogLevel {
 	case "error":
 		log.SetLevel(log.ErrorLevel)
 	case "warn":
@@ -68,13 +72,13 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err = Start(ctx, config)
+	err = Start(ctx)
 	if err != nil {
 		cancel()
 		log.Fatalln("Couldn't initialize schedule routines", err)
 	}
 
-	srv := startHTTPServer(cancel, config)
+	srv := startHTTPServer(cancel)
 
 	// Waitgroup waits for all goroutines to exit
 	globalWg.Wait()
@@ -92,7 +96,7 @@ func vers() {
 }
 
 // startHTTPServer registers the api endpoints and starts the webserver listening
-func startHTTPServer(cancel func(), config common.Config) *http.Server {
+func startHTTPServer(cancel func()) *http.Server {
 	router := mux.NewRouter()
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
@@ -114,65 +118,11 @@ func startHTTPServer(cancel func(), config common.Config) *http.Server {
 		return
 	})
 
-	api.HandleFunc("/reaper/renew/{id:[A-Za-z0-9-]+}", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte{})
-			return
-		}
-
-		// Look for the token in the query
-		tokens, ok := r.URL.Query()["token"]
-		if !ok || len(tokens) != 1 {
-			log.Warnf("Token parameter is missing or of bad format for request: %s", r.URL)
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte{})
-			return
-		}
-
-		vars := mux.Vars(r)
-		id := vars["id"]
-		if id == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte{})
-			return
-		}
-
-		finder, err := search.NewFinder(&config)
-		if err != nil {
-			log.Errorln("Couldn't configure a new finder", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Failed connecting to elasticsearch"))
-			return
-		}
-
-		resource, err := finder.DoGet("resources", "server", id)
-		if err != nil {
-			log.Errorf("Couldn't get the %s resource from elasticsearch, %s", id, err.Error())
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte("Failed getting details about resource"))
-			return
-		}
-
-		log.Debugf("Got resource %+v back from elasticsearch", resource)
-
-		renewalSecret := &RenewalSecret{RenewedAt: resource.RenewedAt, Secret: config.Token}
-		if err := renewalSecret.ValidateRenewalToken(tokens[0]); err != nil {
-			log.Warnf("Failed to validate token string %s, %s", tokens[0], err.Error())
-			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte{})
-			return
-		}
-
-		log.Infof("Renewing %s", vars["id"])
-
-		w.WriteHeader(http.StatusAccepted)
-		w.Write([]byte("ok"))
-	})
+	api.HandleFunc("/reaper/renew/{id:[A-Za-z0-9-]+}", RenewalHander)
 
 	srv := &http.Server{
 		Handler:      handlers.LoggingHandler(os.Stdout, router),
-		Addr:         config.Listen,
+		Addr:         AppConfig.Listen,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
@@ -188,10 +138,90 @@ func startHTTPServer(cancel func(), config common.Config) *http.Server {
 	return srv
 }
 
+// RenewalHander handles resource renewal
+// - The request method is checked, it should be GET
+// - Query parameter 'token' is retrieved from the request
+// - The subject resource id is retrieved from the URL variable
+// - Resource with the id 'id' is fetched from elasticsearch
+// - Token is validated against the information pulled from the resource
+// - If everything is good, the renewed_at tag is updated
+func RenewalHander(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte{})
+		return
+	}
+
+	// Look for the token in the query
+	tokens, ok := r.URL.Query()["token"]
+	if !ok || len(tokens) != 1 {
+		log.Warnf("Token parameter is missing or of bad format for request: %s", r.URL)
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte{})
+		return
+	}
+
+	vars := mux.Vars(r)
+	id := vars["id"]
+	if id == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte{})
+		return
+	}
+
+	finder, err := search.NewFinder(&AppConfig)
+	if err != nil {
+		log.Errorln("Couldn't configure a new finder", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed connecting to elasticsearch"))
+		return
+	}
+
+	resource, err := finder.DoGet("resources", "server", id)
+	if err != nil {
+		log.Errorf("Couldn't get the %s resource from elasticsearch, %s", id, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed getting details about resource"))
+		return
+	}
+
+	log.Debugf("Got resource %+v back from elasticsearch", resource)
+
+	renewalSecret := &RenewalSecret{RenewedAt: resource.RenewedAt, Secret: AppConfig.EncryptionSecret}
+	if err = renewalSecret.ValidateRenewalToken(tokens[0]); err != nil {
+		log.Warnf("Failed to validate token string %s, %s", tokens[0], err.Error())
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte{})
+		return
+	}
+
+	log.Infof("Renewing %s", vars["id"])
+
+	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org)
+	if err = tagger.Tag(map[string]string{"yale:renewed_at": time.Now().Format("2006/01/02 15:04:05")}); err != nil {
+		log.Errorf("Failed to renew resource %s, %s", id, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to process renewal, please try again later."))
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`
+		<html>
+		<head>
+		<meta http-equiv="refresh" content="2;url=https://spinup.internal.yale.edu" />
+		<title>Success</title>
+		</head>
+		<body>
+		Success. Redirecting to the <a href="https://spinup.internal.yale.edu">spinup portal</a>.
+		</body>
+		</html>`))
+}
+
 // Start fires up the batching routine loop which will do a search for each step;
 // Notify, Decommission, Destroy, and then execute those steps.
-func Start(ctx context.Context, config common.Config) error {
-	interval, err := time.ParseDuration(config.Interval)
+func Start(ctx context.Context) error {
+	interval, err := time.ParseDuration(AppConfig.Interval)
 	if err != nil {
 		log.Errorf("Couldn't parse interval duration %s. %+v", interval, err)
 		return err
@@ -199,7 +229,7 @@ func Start(ctx context.Context, config common.Config) error {
 	ticker := time.NewTicker(interval)
 
 	// sort notifier schedule
-	sort.Sort(BySchedule(config.Notify.Age))
+	sort.Sort(BySchedule(AppConfig.Notify.Age))
 
 	globalWg.Add(1)
 	// launch a goroutine to run our batch on a schedule
@@ -213,13 +243,13 @@ func Start(ctx context.Context, config common.Config) error {
 				log.Infoln("Batch routine running...")
 
 				wg.Add(1)
-				go runNotifier(config, &wg)
+				go runNotifier(&wg)
 
 				wg.Add(1)
-				go runDecommissioner(config, &wg)
+				go runDecommissioner(&wg)
 
 				wg.Add(1)
-				go runDestroyer(config, &wg)
+				go runDestroyer(&wg)
 
 				log.Infoln("Batch routine sleeping...")
 				wg.Wait()
@@ -239,22 +269,22 @@ func Start(ctx context.Context, config common.Config) error {
 // - Bail on this resource and continue to the next if tagging fails
 // - Notify with a Notifier
 // - Rollback tag if the notification fails
-func runNotifier(config common.Config, wg *sync.WaitGroup) {
+func runNotifier(wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Infoln("Launching Notifier...")
 
-	finder, err := search.NewFinder(&config)
+	finder, err := search.NewFinder(&AppConfig)
 	if err != nil {
 		log.Errorln("Couldn't configure a new finder", err)
 		return
 	}
 
-	ages := config.Notify.Age
+	ages := AppConfig.Notify.Age
 	lte := fmt.Sprintf("now-%s", ages[0])
 	log.Debugf("%s >= renewed_at", lte)
 
 	// Query for anything older than the oldest age with the configured filters and status created
-	termfilter := append(search.NewTermQueryList(config.Filter), search.TermQuery{Term: "status", Value: "created"})
+	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
 	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
@@ -284,29 +314,29 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 		}
 		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
 
-		decomAge, err := parseDuration(config.Decommission.Age)
+		decomAge, err := parseDuration(AppConfig.Decommission.Age)
 		if err != nil {
-			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, config.Decommission.Age, err.Error())
+			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, AppConfig.Decommission.Age, err.Error())
 			return
 		}
 		decomAt := renewedAt.Add(decomAge)
 
 		renewalSecret := &RenewalSecret{
 			RenewedAt: r.RenewedAt,
-			Secret:    config.Token,
+			Secret:    AppConfig.EncryptionSecret,
 		}
 		token, err := renewalSecret.GenerateRenewalToken()
 		if err != nil {
 			log.Errorf("Failed to generate renewal token, %s", err.Error())
 			continue
 		}
-		renewalLink := fmt.Sprintf("%s/renew/%s?token=%s", config.BaseURL, r.ID, token)
+		renewalLink := fmt.Sprintf("%s/renew/%s?token=%s", AppConfig.BaseURL, r.ID, token)
 		log.Debugf("Generated renewal link: %s", renewalLink)
 
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
 
-			tagger := NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org)
+			tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
 			err = tagger.Tag(map[string]string{
 				"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
 			})
@@ -316,7 +346,7 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 				continue
 			}
 
-			err := NewNotifier(config.Notify.Endpoint, config.Notify.Token).Notify(map[string]string{
+			err := NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
 				"netid":      r.CreatedBy,
 				"link":       renewalLink,
 				"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
@@ -363,7 +393,7 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					tagger := NewTagger(config.Tagging.Endpoint, config.Tagging.Token, r.ID, r.Org)
+					tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
 					err = tagger.Tag(map[string]string{
 						"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
 					})
@@ -373,7 +403,7 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 						continue
 					}
 
-					err := NewNotifier(config.Notify.Endpoint, config.Notify.Token).Notify(map[string]string{
+					err := NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
 						"netid":      r.CreatedBy,
 						"link":       renewalLink,
 						"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
@@ -407,14 +437,14 @@ func runNotifier(config common.Config, wg *sync.WaitGroup) {
 
 // runDecommissioner runs the routine to search for resources with renewed_at dates
 // within the decommission age and the destroy age
-func runDecommissioner(config common.Config, wg *sync.WaitGroup) {
+func runDecommissioner(wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Infoln("Launching Decommissioner...")
 }
 
 // runDestroyer runs the routine to search for resources with renewed_at dates
 // beyond the destroy age
-func runDestroyer(config common.Config, wg *sync.WaitGroup) {
+func runDestroyer(wg *sync.WaitGroup) {
 	defer wg.Done()
 	log.Infoln("Launching Destroyer...")
 }

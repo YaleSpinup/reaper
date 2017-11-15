@@ -39,11 +39,10 @@ var testConfig = []byte(
 		  "endpoint": "http://127.0.0.1:8888/v1/servers",
 		  "token": "12345"
 		},
-		"orgs": ["testorg"],
 		"interval": "15s",
 		"logLevel": "debug",
 		"baseUrl": "http://127.0.0.1:8080/v1/reaper",
-		"token": "54321"
+		"encryptionSecret": "54321"
 	  }`)
 
 func TestReadConfig(t *testing.T) {
@@ -68,13 +67,12 @@ func TestReadConfig(t *testing.T) {
 			Endpoint: "http://127.0.0.1:8888/v1/notify",
 			Token:    "12345",
 		},
-		Orgs:         []string{"testorg"},
 		SearchEngine: map[string]string{"endpoint": "http://127.0.0.1:9200"},
 		Tagging: Tagging{
 			Endpoint: "http://127.0.0.1:8888/v1/servers",
 			Token:    "12345",
 		},
-		Token: "54321",
+		EncryptionSecret: "54321",
 	}
 
 	actualConfig, err := ReadConfig(bytes.NewReader(testConfig))

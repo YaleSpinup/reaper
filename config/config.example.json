@@ -29,8 +29,7 @@
     "endpoint": "http://127.0.0.1:8888/v1/servers",
     "token": "12345"
   },
-  "orgs": ["ftstst"],
   "interval": "120s",
   "logLevel": "info",
-  "token": "super-sekret-token"
+  "encryptionSecret": "super-sekret-token"
 }
