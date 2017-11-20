@@ -5,7 +5,7 @@ MAINTAINER Camden Fisher <camden.fisher@yale.edu>
 WORKDIR /go
 ENV GOPATH=/go
 ADD . /go/src/git.yale.edu/spinup/reaper/
-RUN go build -o reaper src/git.yale.edu/spinup/reaper/main.go
+RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
 RUN mkdir /app && cp /go/reaper /app/reaper && chmod 555 /app/reaper
 
 WORKDIR /app

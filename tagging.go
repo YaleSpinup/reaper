@@ -52,7 +52,9 @@ func (t *Tagger) Tag(tags map[string]string) error {
 		return err
 	}
 
-	req.Header.Set("Auth-Token", t.Token)
+	req.Header.Set("X-Forwarded-User", "s_spinup")
+	req.Header.Set("Auth-token", t.Token)
+	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
 		return err
