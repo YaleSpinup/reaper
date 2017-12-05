@@ -36,6 +36,7 @@ type TermQuery struct {
 }
 
 // NewTermQueryList generates a new list of term queries from a map of strings to strings
+// it functions mostly as a helper to get from configuration to implementation.
 func NewTermQueryList(filters map[string]string) []TermQuery {
 	var tqs []TermQuery
 	for key, value := range filters {

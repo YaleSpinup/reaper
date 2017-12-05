@@ -59,6 +59,7 @@ func (t *Tagger) Tag(tags map[string]string) error {
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode > 299 {
 		return fmt.Errorf("Got a non-success http response from http PUT to %s, %d", url, res.StatusCode)

@@ -48,8 +48,8 @@ func (n *Notifier) Notify(params map[string]string) error {
 	if err != nil {
 		return err
 	}
-
 	defer res.Body.Close()
+
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Warnf("Couldn't read response body: %s", err.Error())
