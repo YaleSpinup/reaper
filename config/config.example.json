@@ -17,7 +17,7 @@
   },
   "decommission": {
     "age": "30d",
-    "endpoint": "http://127.0.0.1:8888/v1/decom",
+    "endpoint": "http://127.0.0.1:8888/v1/servers",
     "token": "12345"
   },
   "destroy": {
@@ -31,5 +31,8 @@
   },
   "interval": "120s",
   "logLevel": "info",
-  "encryptionSecret": "super-sekret-token"
+  "baseUrl": "http://127.0.0.1:8080/v1/reaper",  
+  "redirectUrl": "https://spinup.internal.yale.edu",
+  "encryptionSecret": "super-sekret-token",
+  "token": "super-er-sekret-token"
 }

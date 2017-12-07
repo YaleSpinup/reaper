@@ -21,6 +21,8 @@ type Config struct {
 	SearchEngine     map[string]string
 	Tagging          Tagging
 	EncryptionSecret string
+	RedirectURL      string
+	Token            string
 }
 
 // Notifier configures the notification process
