@@ -34,6 +34,18 @@ var (
 	AppConfig common.Config
 )
 
+// Notification template
+const NotificationTemplate = `
+<html>
+<head>
+<meta http-equiv="refresh" content="2;url=https://spinup.internal.yale.edu" />
+<title>Success</title>
+</head>
+<body>
+Success. Redirecting to the <a href="https://spinup.internal.yale.edu">spinup portal</a>.
+</body>
+</html>`
+
 func main() {
 	flag.Parse()
 	if *version {
@@ -206,16 +218,9 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`
-		<html>
-		<head>
-		<meta http-equiv="refresh" content="2;url=https://spinup.internal.yale.edu" />
-		<title>Success</title>
-		</head>
-		<body>
-		Success. Redirecting to the <a href="https://spinup.internal.yale.edu">spinup portal</a>.
-		</body>
-		</html>`))
+
+	// TODO: parse this template with redirect URL
+	w.Write([]byte(NotificationTemplate))
 }
 
 // Start fires up the batching routine loop which will do a search for each step;
@@ -270,8 +275,8 @@ func Start(ctx context.Context) error {
 // - Notify with a Notifier
 // - Rollback tag if the notification fails
 func runNotifier(wg *sync.WaitGroup) {
-	defer wg.Done()
 	log.Infoln("Launching Notifier...")
+	defer wg.Done()
 
 	finder, err := search.NewFinder(&AppConfig)
 	if err != nil {
@@ -335,36 +340,9 @@ func runNotifier(wg *sync.WaitGroup) {
 
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
-
-			tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
-			err = tagger.Tag(map[string]string{
-				"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
-			})
-
+			err := notify(r, renewalLink, decomAt, renewedAt)
 			if err != nil {
-				log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
-				continue
-			}
-
-			err := NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
-				"netid":      r.CreatedBy,
-				"link":       renewalLink,
-				"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
-				"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
-				"fqdn":       r.FQDN,
-			})
-
-			if err != nil {
-				log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
-
-				err = tagger.Tag(map[string]string{
-					"yale:notified_at": "",
-				})
-
-				if err != nil {
-					log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
-				}
-
+				log.Errorf("Failed to notify. %s", err.Error())
 				continue
 			}
 		} else {
@@ -383,7 +361,8 @@ func runNotifier(wg *sync.WaitGroup) {
 				ageDuration, err := parseDuration(age)
 				if err != nil {
 					log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, age, err.Error())
-					continue
+					// If we can't parse the age, stop trying and move on
+					break
 				}
 
 				// time the age threshold was crossed
@@ -393,34 +372,9 @@ func runNotifier(wg *sync.WaitGroup) {
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
-					err = tagger.Tag(map[string]string{
-						"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
-					})
-
+					err := notify(r, renewalLink, decomAt, renewedAt)
 					if err != nil {
-						log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
-						continue
-					}
-
-					err := NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
-						"netid":      r.CreatedBy,
-						"link":       renewalLink,
-						"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
-						"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
-						"fqdn":       r.FQDN,
-					})
-
-					if err != nil {
-						log.Errorf("Failed to notify.  Rolling back notified_at tag to %s. %s", r.NotifiedAt, err.Error())
-
-						err = tagger.Tag(map[string]string{
-							"yale:notified_at": r.NotifiedAt,
-						})
-
-						if err != nil {
-							log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
-						}
+						log.Errorf("Failed to notify. %s", err.Error())
 					}
 
 					// stop notifying if we matched
@@ -431,20 +385,110 @@ func runNotifier(wg *sync.WaitGroup) {
 			}
 		}
 	}
+}
 
-	return
+func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
+	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
+	err := tagger.Tag(map[string]string{
+		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
+	})
+
+	if err != nil {
+		log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
+		return err
+	}
+
+	err = NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
+		"netid":      r.CreatedBy,
+		"link":       renewalLink,
+		"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
+		"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
+		"fqdn":       r.FQDN,
+	})
+
+	if err != nil {
+		log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
+
+		// if the notification failed, try to roll back the tag
+		err = tagger.Tag(map[string]string{
+			"yale:notified_at": r.NotifiedAt,
+		})
+
+		if err != nil {
+			log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
+		}
+	}
+
+	return err
 }
 
 // runDecommissioner runs the routine to search for resources with renewed_at dates
 // within the decommission age and the destroy age
 func runDecommissioner(wg *sync.WaitGroup) {
-	defer wg.Done()
 	log.Infoln("Launching Decommissioner...")
+	defer wg.Done()
+
+	finder, err := search.NewFinder(&AppConfig)
+	if err != nil {
+		log.Errorln("Couldn't configure a new finder", err)
+		return
+	}
+
+	// Query for anything older than the oldest age with the configured filters and status created
+	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
+	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+		Field:      "yale:renewed_at",
+		Format:     "YYYY/MM/dd HH:mm:ss",
+		Lte:        fmt.Sprintf("now-%s", AppConfig.Decommission.Age),
+		TermFilter: termfilter,
+	})
+
+	if err != nil {
+		log.Errorln("Failed to execute date range query", err)
+		return
+	}
+
+	// loop over the returned resources
+	for _, r := range resources {
+		log.Debugf("Checking returned resource: %+v", r)
+
+		if r.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+			continue
+		}
+
+		// time of the last renewal
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
+		if err != nil {
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			continue
+		}
+		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
+
+		destroyAge, err := parseDuration(AppConfig.Destroy.Age)
+		if err != nil {
+			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, AppConfig.Destroy.Age, err.Error())
+			return
+		}
+		// Add the destroy age to the renewed_at date to get the destroy_at date
+		destroyAt := renewedAt.Add(destroyAge)
+
+		if destroyAt.Before(time.Now()) {
+			log.Warnf("%s has crossed the destroy threshold but hasn't been decommissioned (Destruction scheduled: %s)", r.ID, destroyAt.String())
+		}
+
+		log.Infof("%s has crossed the decommision threshold date. (Destruction scheduled: %s)", r.ID, destroyAt.String())
+
+		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).SetStatus()
+		if err != nil {
+			log.Errorf("Unable to decommission %s, %s", r.ID, err.Error())
+		}
+	}
 }
 
 // runDestroyer runs the routine to search for resources with renewed_at dates
 // beyond the destroy age
 func runDestroyer(wg *sync.WaitGroup) {
-	defer wg.Done()
 	log.Infoln("Launching Destroyer...")
+	defer wg.Done()
 }

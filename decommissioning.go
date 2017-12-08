@@ -10,17 +10,17 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Tagger is the data object for tagging
-type Tagger struct {
+// Decommissioner is the data object for decommissioning
+type Decommissioner struct {
 	Endpoint   string
 	Token      string
 	ResourceID string
 	Org        string
 }
 
-// NewTagger creates a new tagging object
-func NewTagger(endpoint, token, id, org string) *Tagger {
-	return &Tagger{
+// NewDecommissioner creates a new decommissioning object
+func NewDecommissioner(endpoint, token, id, org string) *Decommissioner {
+	return &Decommissioner{
 		Endpoint:   endpoint,
 		Token:      token,
 		ResourceID: id,
@@ -28,15 +28,16 @@ func NewTagger(endpoint, token, id, org string) *Tagger {
 	}
 }
 
-// Tag updates the tags
-func (t *Tagger) Tag(tags map[string]string) error {
-	log.Debugf("Tagging with %+v and tags %+v", *t, tags)
+// SetStatus decommissions the instance by 'PUT'ing a new status to it
+func (d *Decommissioner) SetStatus() error {
+	log.Debugf("Decomming with %+v ", *d)
 
 	client := &http.Client{Timeout: 30 * time.Second}
+
 	data, err := json.Marshal(struct {
-		Tags map[string]string `json:"tags"`
+		Status string `json:"status"`
 	}{
-		Tags: tags,
+		Status: "decom",
 	})
 	if err != nil {
 		return err
@@ -44,8 +45,8 @@ func (t *Tagger) Tag(tags map[string]string) error {
 
 	log.Debugf("Marshalled JSON body %s, creating new HTTP request", string(data))
 
-	url := fmt.Sprintf("%s/%s/%s/tags", t.Endpoint, t.Org, t.ResourceID)
-	log.Debugf("Generated URL for tag request: %s", url)
+	url := fmt.Sprintf("%s/%s/%s/status", d.Endpoint, d.Org, d.ResourceID)
+	log.Debugf("Generated URL for decom status request: %s", url)
 
 	req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
 	if err != nil {
@@ -53,7 +54,7 @@ func (t *Tagger) Tag(tags map[string]string) error {
 	}
 
 	req.Header.Set("X-Forwarded-User", "reaper")
-	req.Header.Set("Auth-token", t.Token)
+	req.Header.Set("Auth-token", d.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := client.Do(req)
 	if err != nil {
