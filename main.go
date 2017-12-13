@@ -434,7 +434,7 @@ func runDecommissioner(wg *sync.WaitGroup) {
 		return
 	}
 
-	// Query for anything older than the oldest age with the configured filters and status created
+	// Query for anything older than the decommission age with the configured filters and status created
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
 	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
@@ -477,7 +477,7 @@ func runDecommissioner(wg *sync.WaitGroup) {
 			log.Warnf("%s has crossed the destroy threshold but hasn't been decommissioned (Destruction scheduled: %s)", r.ID, destroyAt.String())
 		}
 
-		log.Infof("%s has crossed the decommision threshold date. (Destruction scheduled: %s)", r.ID, destroyAt.String())
+		log.Infof("%s has crossed the decommision threshold. (Destruction scheduled: %s)", r.ID, destroyAt.String())
 
 		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).SetStatus()
 		if err != nil {
@@ -491,4 +491,50 @@ func runDecommissioner(wg *sync.WaitGroup) {
 func runDestroyer(wg *sync.WaitGroup) {
 	log.Infoln("Launching Destroyer...")
 	defer wg.Done()
+
+	finder, err := search.NewFinder(&AppConfig)
+	if err != nil {
+		log.Errorln("Couldn't configure a new finder", err)
+		return
+	}
+
+	// Query for anything older than the destroy age with the configured filters and status decom
+	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "decom"})
+	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+		Field:      "yale:renewed_at",
+		Format:     "YYYY/MM/dd HH:mm:ss",
+		Lte:        fmt.Sprintf("now-%s", AppConfig.Destroy.Age),
+		TermFilter: termfilter,
+	})
+
+	if err != nil {
+		log.Errorln("Failed to execute date range query", err)
+		return
+	}
+
+	// loop over the returned resources
+	for _, r := range resources {
+		log.Debugf("Checking returned resource: %+v", r)
+
+		if r.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+			continue
+		}
+
+		// time of the last renewal
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
+		if err != nil {
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			continue
+		}
+
+		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
+		log.Infof("%s has crossed the destruction threshold.", r.ID)
+
+		err = NewDestroyer(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).Destroy()
+		if err != nil {
+			log.Errorf("Unable to destroy %s, %s", r.ID, err.Error())
+		}
+	}
+
 }

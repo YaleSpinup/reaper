@@ -29,6 +29,7 @@
   "interval": "{{ .reap_interval }}",
   "logLevel": "{{ .loglevel }}",
   "baseUrl": "{{ .api_base_url }}",
-  "encryptionSecret": "{{ .api_encryption_secret }}"
+  "encryptionSecret": "{{ .api_encryption_secret }}",
+  "redirectUrl": "{{ .api_redirect_url }}",
+  "token": "{{ .api_token }}"
 }
-  
