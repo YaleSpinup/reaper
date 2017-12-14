@@ -178,6 +178,23 @@ instances are renewed.  Tagging is accomplished by `PUT`ing a map of tags to an 
 The actual endpoint will be: `http://127.0.0.1:8888/v1/servers/{{ORG}}/{{INSTANCE_ID}}/tags`
 
 
+### Event Reporting
+
+Event reporting is supported through the [event reporter library](https://git.yale.edu/spinup/eventreporter).  If no reporters
+are configured, no events will be reported.
+
+```json
+"eventReporters": {
+  "slack": {
+    "endpoint": "https://hooks.slack.com/services/xxxxxxxx/xxxxxxxxx/xxxxxxxxxxxx",
+    "channel": "#spinup-dev",
+    "icon": ":skull_and_crossbones:",
+    "username": "Reaper"
+  }
+}
+```
+
+
 ### Full Example
 
 ```json
@@ -211,6 +228,14 @@ The actual endpoint will be: `http://127.0.0.1:8888/v1/servers/{{ORG}}/{{INSTANC
   "tagging": {
     "endpoint": "http://127.0.0.1:8888/v1/servers",
     "token": "12345"
+  },
+  "eventReporters": {
+    "slack": {
+      "endpoint": "https://hooks.slack.com/services/xxxxxxxx/xxxxxxxxx/xxxxxxxxxxxx",
+      "channel": "#spinup-dev",
+      "icon": ":skull_and_crossbones:",
+      "username": "Reaper"
+    }
   },
   "interval": "120s",
   "logLevel": "info",
