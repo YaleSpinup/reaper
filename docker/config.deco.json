@@ -26,6 +26,14 @@
     "endpoint": "{{ .api_tagging_endpoint }}",
     "token": "{{ .api_tagging_token }}"
   },
+  "eventReporters": {
+    "slack": {
+      "endpoint": "{{ .api_slack_endpoint }}",
+      "channel": "#spinup-dev",
+      "icon": ":skull_and_crossbones:",
+      "username": "Reaper"
+    }
+  },
   "interval": "{{ .reap_interval }}",
   "logLevel": "{{ .loglevel }}",
   "baseUrl": "{{ .api_base_url }}",

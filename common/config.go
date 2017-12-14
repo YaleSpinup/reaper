@@ -23,6 +23,7 @@ type Config struct {
 	EncryptionSecret string
 	RedirectURL      string
 	Token            string
+	EventReporters   map[string]map[string]string
 }
 
 // Notifier configures the notification process
