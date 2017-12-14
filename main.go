@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -10,6 +11,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	report "git.yale.edu/spinup/eventreporter"
 
 	"git.yale.edu/spinup/reaper/common"
 	"git.yale.edu/spinup/reaper/reaper"
@@ -32,6 +35,9 @@ var (
 
 	// AppConfig is the global applicatoin configuration
 	AppConfig common.Config
+
+	// Event Reporters
+	EventReporters []report.Reporter
 )
 
 // Notification template
@@ -80,6 +86,11 @@ func main() {
 
 	log.Debugf("Loaded Config: %+v", config)
 
+	err = configureEventReporters()
+	if err != nil {
+		log.Fatalln("Couldn't initialize event reporters", err)
+	}
+
 	// Setup context to allow goroutines to be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -105,6 +116,26 @@ func main() {
 func vers() {
 	fmt.Printf("Reaper Version: %s%s\n", Version, VersionPrerelease)
 	os.Exit(0)
+}
+
+func configureEventReporters() error {
+	for name, config := range AppConfig.EventReporters {
+		switch name {
+		case "slack":
+			reporter, err := report.NewSlackReporter(config)
+			if err != nil {
+				return err
+			}
+
+			log.Debugf("Configured %s event reporter", name)
+			EventReporters = append(EventReporters, reporter)
+		default:
+			msg := fmt.Sprintf("Unknown event reporter name, %s", name)
+			return errors.New(msg)
+		}
+	}
+
+	return nil
 }
 
 // startHTTPServer registers the api endpoints and starts the webserver listening
@@ -367,7 +398,7 @@ func runNotifier(wg *sync.WaitGroup) {
 
 				// time the age threshold was crossed
 				ageThresholdAt := renewedAt.Add(ageDuration)
-				log.Infof("%s crossed the %s age threshold at %s", r.ID, age, ageThresholdAt.String())
+				log.Infof("%s %s age threshold: %s", r.ID, age, ageThresholdAt.String())
 
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
@@ -388,12 +419,15 @@ func runNotifier(wg *sync.WaitGroup) {
 }
 
 func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
+	reportEvent(fmt.Sprintf("Notifying for %s (%s)", r.FQDN, r.ID), report.INFO)
+
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
 	err := tagger.Tag(map[string]string{
 		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
 	})
 
 	if err != nil {
+		reportEvent(fmt.Sprintf("FAILED to update tag for %s (%s)", r.FQDN, r.ID), report.ERROR)
 		log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
 		return err
 	}
@@ -407,6 +441,7 @@ func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time
 	})
 
 	if err != nil {
+		reportEvent(fmt.Sprintf("FAILED to send notification for %s (%s)", r.FQDN, r.ID), report.ERROR)
 		log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
 
 		// if the notification failed, try to roll back the tag
@@ -415,6 +450,7 @@ func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time
 		})
 
 		if err != nil {
+			reportEvent(fmt.Sprintf("FAILED to roll back tag for %s (%s)", r.FQDN, r.ID), report.ERROR)
 			log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
 		}
 	}
@@ -479,8 +515,10 @@ func runDecommissioner(wg *sync.WaitGroup) {
 
 		log.Infof("%s has crossed the decommision threshold. (Destruction scheduled: %s)", r.ID, destroyAt.String())
 
+		reportEvent(fmt.Sprintf("Decommissioning for %s (%s)", r.FQDN, r.ID), report.INFO)
 		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).SetStatus()
 		if err != nil {
+			reportEvent(fmt.Sprintf("FAILED to decommission for %s (%s)", r.FQDN, r.ID), report.ERROR)
 			log.Errorf("Unable to decommission %s, %s", r.ID, err.Error())
 		}
 	}
@@ -531,10 +569,25 @@ func runDestroyer(wg *sync.WaitGroup) {
 		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
 		log.Infof("%s has crossed the destruction threshold.", r.ID)
 
+		reportEvent(fmt.Sprintf("Destroying for %s (%s)", r.FQDN, r.ID), report.INFO)
 		err = NewDestroyer(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).Destroy()
 		if err != nil {
+			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", r.FQDN, r.ID), report.ERROR)
 			log.Errorf("Unable to destroy %s, %s", r.ID, err.Error())
 		}
 	}
 
+}
+
+func reportEvent(msg string, level report.Level) {
+	for _, r := range EventReporters {
+		e := report.Event{
+			Message: msg,
+			Level:   level,
+		}
+		err := r.Report(&e)
+		if err != nil {
+			log.Errorf("Failed to report event (%s) %s", msg, err.Error())
+		}
+	}
 }
