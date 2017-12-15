@@ -75,6 +75,7 @@ func (r *SlackReporter) Report(e *Event) error {
 		return err
 	}
 
+	req.Close = true
 	req.Header.Set("Content-Type", "application/json")
 	res, err := r.Client.Do(req)
 	if err != nil {
