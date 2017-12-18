@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"sort"
 	"sync"
@@ -84,6 +85,11 @@ func main() {
 		log.SetLevel(log.InfoLevel)
 	}
 
+	if AppConfig.LogLevel == "debug" {
+		log.Debug("Starting profiler on 127.0.0.1:6080")
+		go http.ListenAndServe("127.0.0.1:6080", nil)
+	}
+
 	log.Debugf("Loaded Config: %+v", config)
 
 	err = configureEventReporters()
@@ -143,6 +149,7 @@ func configureEventReporters() error {
 // startHTTPServer registers the api endpoints and starts the webserver listening
 func startHTTPServer(cancel func()) *http.Server {
 	router := mux.NewRouter()
+
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
@@ -240,7 +247,9 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Infof("Renewing %s", vars["id"])
+	msg := fmt.Sprintf("Renewing %s", vars["id"])
+	log.Info(msg)
+	reportEvent(msg, report.INFO)
 
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org)
 	if err = tagger.Tag(map[string]string{"yale:renewed_at": time.Now().Format("2006/01/02 15:04:05")}); err != nil {
@@ -400,7 +409,7 @@ func runNotifier(wg *sync.WaitGroup) {
 
 				// time the age threshold was crossed
 				ageThresholdAt := renewedAt.Add(ageDuration)
-				log.Infof("%s %s age threshold: %s", r.ID, age, ageThresholdAt.String())
+				log.Debugf("%s %s age threshold: %s", r.ID, age, ageThresholdAt.String())
 
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())

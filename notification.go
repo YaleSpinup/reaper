@@ -18,16 +18,16 @@ type Notifier struct {
 }
 
 // NewNotifier creates a new notification object with the given params
-func NewNotifier(endpoint, token string) *Notifier {
-	return &Notifier{
+func NewNotifier(endpoint, token string) Notifier {
+	return Notifier{
 		Endpoint: endpoint,
 		Token:    token,
 	}
 }
 
 // Notify sends the notification
-func (n *Notifier) Notify(params map[string]string) error {
-	log.Debugf("Notifying with %+v", *n)
+func (n Notifier) Notify(params map[string]string) error {
+	log.Debugf("Notifying with endpoint: %s, and params: %+v", n.Endpoint, params)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	data, err := json.Marshal(params)

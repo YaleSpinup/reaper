@@ -19,8 +19,8 @@ type Decommissioner struct {
 }
 
 // NewDecommissioner creates a new decommissioning object
-func NewDecommissioner(endpoint, token, id, org string) *Decommissioner {
-	return &Decommissioner{
+func NewDecommissioner(endpoint, token, id, org string) Decommissioner {
+	return Decommissioner{
 		Endpoint:   endpoint,
 		Token:      token,
 		ResourceID: id,
@@ -29,8 +29,8 @@ func NewDecommissioner(endpoint, token, id, org string) *Decommissioner {
 }
 
 // SetStatus decommissions the instance by 'PUT'ing a new status to it
-func (d *Decommissioner) SetStatus() error {
-	log.Debugf("Decomming with %+v ", *d)
+func (d Decommissioner) SetStatus() error {
+	log.Debugf("Decomming with endpoint: %s, resource: %s, org: %s  ", d.Endpoint, d.ResourceID, d.Org)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 

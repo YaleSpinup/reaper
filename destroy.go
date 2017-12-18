@@ -18,8 +18,8 @@ type Destroyer struct {
 }
 
 // NewDestroyer creates a new destruction object
-func NewDestroyer(endpoint, token, id, org string) *Destroyer {
-	return &Destroyer{
+func NewDestroyer(endpoint, token, id, org string) Destroyer {
+	return Destroyer{
 		Endpoint:   endpoint,
 		Token:      token,
 		ResourceID: id,
@@ -28,8 +28,8 @@ func NewDestroyer(endpoint, token, id, org string) *Destroyer {
 }
 
 // Destroy destroys the instance by 'DELETE'ing it
-func (d *Destroyer) Destroy() error {
-	log.Debugf("Destroying with %+v ", *d)
+func (d Destroyer) Destroy() error {
+	log.Debugf("Destroying with endpoint: %s, resource: %s, org: %s  ", d.Endpoint, d.ResourceID, d.Org)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 
