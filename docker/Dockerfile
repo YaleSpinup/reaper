@@ -1,14 +1,18 @@
 # build stage
-FROM golang:alpine
-MAINTAINER Camden Fisher <camden.fisher@yale.edu>
-
+FROM golang:alpine AS build-env
 WORKDIR /go
 ENV GOPATH=/go
 ADD . /go/src/git.yale.edu/spinup/reaper/
 RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
-RUN mkdir /app && cp /go/reaper /app/reaper && chmod 555 /app/reaper
+
+# final stage
+FROM alpine
+MAINTAINER Camden Fisher <camden.fisher@yale.edu>
 
 WORKDIR /app
+COPY --from=build-env /go/reaper /app/reaper
+RUN chmod 555 /app/reaper
+
 RUN apk add --no-cache bash ca-certificates wget python gettext && \
     wget -nv "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" && \
     unzip awscli-bundle.zip && \
