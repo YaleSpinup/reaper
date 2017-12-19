@@ -247,10 +247,6 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := fmt.Sprintf("Renewing %s", vars["id"])
-	log.Info(msg)
-	reportEvent(msg, report.INFO)
-
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org)
 	if err = tagger.Tag(map[string]string{"yale:renewed_at": time.Now().Format("2006/01/02 15:04:05")}); err != nil {
 		log.Errorf("Failed to renew resource %s, %s", id, err.Error())
@@ -258,6 +254,10 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Unable to process renewal, please try again later."))
 		return
 	}
+
+	msg := fmt.Sprintf("Renewed %s (%s) created by %s", resource.FQDN, resource.ID, resource.CreatedBy)
+	log.Info(msg)
+	reportEvent(msg, report.INFO)
 
 	w.WriteHeader(http.StatusOK)
 
@@ -286,20 +286,11 @@ func Start(ctx context.Context) error {
 		for {
 			select {
 			case <-ticker.C:
-				var wg sync.WaitGroup
 				log.Infoln("Batch routine running...")
-
-				wg.Add(1)
-				go runNotifier(&wg)
-
-				wg.Add(1)
-				go runDecommissioner(&wg)
-
-				wg.Add(1)
-				go runDestroyer(&wg)
-
+				destroy()
+				decommission()
+				notify()
 				log.Infoln("Batch routine sleeping...")
-				wg.Wait()
 			case <-ctx.Done():
 				log.Infoln("Shutdown the batch routine")
 				return
@@ -310,15 +301,14 @@ func Start(ctx context.Context) error {
 	return nil
 }
 
-// runNotifier runs the routine to search for resources with renewed_at dates within a given range configured for notification.
+// notify runs the routine to search for resources with renewed_at dates within a given range configured for notification.
 // If the age-based notification threshold is crossed and a notification hasn't been sent:
 // - Update the notified_at tag on the instance
 // - Bail on this resource and continue to the next if tagging fails
 // - Notify with a Notifier
 // - Rollback tag if the notification fails
-func runNotifier(wg *sync.WaitGroup) {
+func notify() {
 	log.Infoln("Launching Notifier...")
-	defer wg.Done()
 
 	finder, err := search.NewFinder(&AppConfig)
 	if err != nil {
@@ -382,7 +372,7 @@ func runNotifier(wg *sync.WaitGroup) {
 
 		if r.NotifiedAt == "" {
 			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
-			err := notify(r, renewalLink, decomAt, renewedAt)
+			err := sendNotification(r, renewalLink, decomAt, renewedAt)
 			if err != nil {
 				log.Errorf("Failed to notify. %s", err.Error())
 				continue
@@ -414,7 +404,7 @@ func runNotifier(wg *sync.WaitGroup) {
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
 					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					err := notify(r, renewalLink, decomAt, renewedAt)
+					err := sendNotification(r, renewalLink, decomAt, renewedAt)
 					if err != nil {
 						log.Errorf("Failed to notify. %s", err.Error())
 					}
@@ -429,7 +419,7 @@ func runNotifier(wg *sync.WaitGroup) {
 	}
 }
 
-func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
+func sendNotification(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
 	reportEvent(fmt.Sprintf("Notifying for %s (%s)", r.FQDN, r.ID), report.INFO)
 
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
@@ -469,11 +459,9 @@ func notify(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time
 	return err
 }
 
-// runDecommissioner runs the routine to search for resources with renewed_at dates
-// within the decommission age and the destroy age
-func runDecommissioner(wg *sync.WaitGroup) {
+// decommission runs the routine to search for resources with renewed_at dates within the decommission age and the destroy age
+func decommission() {
 	log.Infoln("Launching Decommissioner...")
-	defer wg.Done()
 
 	finder, err := search.NewFinder(&AppConfig)
 	if err != nil {
@@ -535,11 +523,9 @@ func runDecommissioner(wg *sync.WaitGroup) {
 	}
 }
 
-// runDestroyer runs the routine to search for resources with renewed_at dates
-// beyond the destroy age
-func runDestroyer(wg *sync.WaitGroup) {
+// destroy runs the routine to search for resources with renewed_at dates beyond the destroy age
+func destroy() {
 	log.Infoln("Launching Destroyer...")
-	defer wg.Done()
 
 	finder, err := search.NewFinder(&AppConfig)
 	if err != nil {
