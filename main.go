@@ -255,7 +255,7 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := fmt.Sprintf("Renewed %s (%s) created by %s", resource.FQDN, resource.ID, resource.CreatedBy)
+	msg := fmt.Sprintf("Renewed %s (%s) created by %s", resource.FQDN, id, resource.CreatedBy)
 	log.Info(msg)
 	reportEvent(msg, report.INFO)
 
