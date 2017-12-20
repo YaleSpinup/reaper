@@ -4,8 +4,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
+// BySchedule is a type for sorting by the schedule
 type BySchedule []string
 
 // parseDuration parses durations of days, weeks and months (in the most simplistic way)
@@ -52,7 +55,17 @@ func (s BySchedule) Swap(i, j int) {
 
 // Less is required to satisfy sort.Interface
 func (s BySchedule) Less(i, j int) bool {
-	di, _ := parseDuration(s[i])
-	dj, _ := parseDuration(s[j])
+	di, err := parseDuration(s[i])
+	if err != nil {
+		log.Errorf("Failed to parse duration %s", s[i])
+		return false
+	}
+
+	dj, err := parseDuration(s[j])
+	if err != nil {
+		log.Errorf("Failed to parse duration %s", s[j])
+		return false
+	}
+
 	return di < dj
 }

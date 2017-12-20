@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,26 +24,34 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// Version is the main version number
-const Version = reaper.Version
-
-// VersionPrerelease is a prerelease marker
-const VersionPrerelease = reaper.VersionPrerelease
-
 var (
-	configFileName = flag.String("config", "config/config.json", "Configuration file.")
-	version        = flag.Bool("version", false, "Display version information and exit.")
-	globalWg       sync.WaitGroup
+	// Version is the application version, it can be overriden at buildtime with ldflags
+	Version = reaper.Version
+
+	// VersionPrerelease is the prerelease marker, it can be overriden at buildtime with ldflags
+	VersionPrerelease = reaper.VersionPrerelease
+
+	// buildstamp is the timestamp the binary was built, it should be set at buildtime with ldflags
+	buildstamp = "No BuildStamp Provided"
+
+	// githash is the git sha of the built binary, it should be set at buildtime with ldflags
+	githash = "No Git Commit Provided"
 
 	// AppConfig is the global applicatoin configuration
 	AppConfig common.Config
 
-	// Event Reporters
+	// EventReporters is a slice of reporting endpoints
 	EventReporters []report.Reporter
+
+	globalWg sync.WaitGroup
+
+	configFileName = flag.String("config", "config/config.json", "Configuration file.")
+	version        = flag.Bool("version", false, "Display version information and exit.")
 )
 
-// Notification template
-const NotificationTemplate = `
+// RenewalTemplate is the html template for the renewal endpoint
+// TODO: actually templatize it
+const RenewalTemplate = `
 <html>
 <head>
 <meta http-equiv="refresh" content="2;url=https://spinup.internal.yale.edu" />
@@ -123,6 +132,8 @@ func main() {
 
 func vers() {
 	fmt.Printf("Reaper Version: %s%s\n", Version, VersionPrerelease)
+	fmt.Println("Git Commit Hash:", githash)
+	fmt.Println("UTC Build Time:", buildstamp)
 	os.Exit(0)
 }
 
@@ -152,14 +163,41 @@ func startHTTPServer(cancel func()) *http.Server {
 
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
+		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte{})
 			return
 		}
-		log.Debug("Got ping request, responding pong.")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
+	})
+
+	api.HandleFunc("/reaper/version", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte{})
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+
+		data, err := json.Marshal(struct {
+			Version    string `json:"version"`
+			GitHash    string `json:"githash"`
+			BuildStamp string `json:"buildstamp"`
+		}{
+			Version:    fmt.Sprintf("%s%s", Version, VersionPrerelease),
+			GitHash:    githash,
+			BuildStamp: buildstamp,
+		})
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte{})
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write(data)
 	})
 
 	api.HandleFunc("/reaper/shutdown", func(w http.ResponseWriter, r *http.Request) {
@@ -198,7 +236,7 @@ func startHTTPServer(cancel func()) *http.Server {
 // - Token is validated against the information pulled from the resource
 // - If everything is good, the renewed_at tag is updated
 func RenewalHander(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" {
+	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte{})
 		return
@@ -262,7 +300,7 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	// TODO: parse this template with redirect URL
-	w.Write([]byte(NotificationTemplate))
+	w.Write([]byte(RenewalTemplate))
 }
 
 // Start fires up the batching routine loop which will do a search for each step;
@@ -420,8 +458,6 @@ func notify() {
 }
 
 func sendNotification(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
-	reportEvent(fmt.Sprintf("Notifying for %s (%s)", r.FQDN, r.ID), report.INFO)
-
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
 	err := tagger.Tag(map[string]string{
 		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
@@ -433,6 +469,7 @@ func sendNotification(r *search.Resource, renewalLink string, decomAt, renewedAt
 		return err
 	}
 
+	reportEvent(fmt.Sprintf("Notifying %s for %s (%s)", r.CreatedBy, r.FQDN, r.ID), report.INFO)
 	err = NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
 		"netid":      r.CreatedBy,
 		"link":       renewalLink,
