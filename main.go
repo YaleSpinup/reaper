@@ -106,7 +106,7 @@ func main() {
 		log.Fatalln("Couldn't initialize event reporters", err)
 	}
 
-	reportEvent(fmt.Sprintf("Starting reaper v%s%s (%s)", Version, VersionPrerelease, AppConfig.BaseURL), report.INFO)
+	reportEvent(fmt.Sprintf("Starting reaper %s%s (%s)", Version, VersionPrerelease, AppConfig.BaseURL), report.INFO)
 
 	// Setup context to allow goroutines to be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
