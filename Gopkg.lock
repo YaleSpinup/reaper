@@ -5,7 +5,7 @@
   branch = "master"
   name = "git.yale.edu/spinup/eventreporter"
   packages = ["."]
-  revision = "b65c5f31171993f937730ec03a63663dca801e8b"
+  revision = "89518c29be571645e06b3112bd5b170180f8796b"
 
 [[projects]]
   name = "github.com/gorilla/context"
@@ -41,19 +41,19 @@
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["bcrypt","blowfish","ssh/terminal"]
-  revision = "244f6ce1f09cc9f3d7bffe29b033aaa13c0cc2f3"
+  revision = "95a4943f35d008beabde8c11e5075a1b714e6419"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "571f7bbbe08da2a8955aed9d4db316e78630e9a3"
+  revision = "83801418e1b59fb1880e363299581ee543af32ca"
 
 [[projects]]
   name = "gopkg.in/olivere/elastic.v5"
   packages = [".","config","uritemplates"]
-  revision = "79ff368708b3a2a9da641dc831d95fd0782bf4ef"
-  version = "v5.0.58"
+  revision = "b423d843ef937586f8ad3142ad4557836817080d"
+  version = "v5.0.59"
 
 [solve-meta]
   analyzer-name = "dep"

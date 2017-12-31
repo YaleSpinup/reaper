@@ -614,12 +614,13 @@ func destroy() {
 }
 
 func reportEvent(msg string, level report.Level) {
+	e := report.Event{
+		Message: msg,
+		Level:   level,
+	}
+
 	for _, r := range EventReporters {
-		e := report.Event{
-			Message: msg,
-			Level:   level,
-		}
-		err := r.Report(&e)
+		err := r.Report(e)
 		if err != nil {
 			log.Errorf("Failed to report event (%s) %s", msg, err.Error())
 		}
