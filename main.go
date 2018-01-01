@@ -21,7 +21,10 @@ import (
 	"git.yale.edu/spinup/reaper/search"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+
 	log "github.com/sirupsen/logrus"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -172,6 +175,8 @@ func startHTTPServer(cancel func()) *http.Server {
 		w.Write([]byte("pong"))
 	})
 
+	api.Handle("/reaper/metrics", promhttp.Handler())
+
 	api.HandleFunc("/reaper/version", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusBadRequest)
@@ -320,14 +325,21 @@ func Start(ctx context.Context) error {
 	// launch a goroutine to run our batch on a schedule
 	go func() {
 		defer globalWg.Done()
+
+		finder, err := search.NewFinder(&AppConfig)
+		if err != nil {
+			log.Errorln("Couldn't configure a new finder", err)
+			return
+		}
+
 		log.Infof("Initializing the batching routine loop.")
 		for {
 			select {
 			case <-ticker.C:
 				log.Infoln("Batch routine running...")
-				destroy()
-				decommission()
-				notify()
+				destroy(*finder)
+				decommission(*finder)
+				notify(*finder)
 				log.Infoln("Batch routine sleeping...")
 			case <-ctx.Done():
 				log.Infoln("Shutdown the batch routine")
@@ -345,14 +357,8 @@ func Start(ctx context.Context) error {
 // - Bail on this resource and continue to the next if tagging fails
 // - Notify with a Notifier
 // - Rollback tag if the notification fails
-func notify() {
+func notify(finder search.Finder) {
 	log.Infoln("Launching Notifier...")
-
-	finder, err := search.NewFinder(&AppConfig)
-	if err != nil {
-		log.Errorln("Couldn't configure a new finder", err)
-		return
-	}
 
 	ages := AppConfig.Notify.Age
 	lte := fmt.Sprintf("now-%s", ages[0])
@@ -497,14 +503,8 @@ func sendNotification(r *search.Resource, renewalLink string, decomAt, renewedAt
 }
 
 // decommission runs the routine to search for resources with renewed_at dates within the decommission age and the destroy age
-func decommission() {
+func decommission(finder search.Finder) {
 	log.Infoln("Launching Decommissioner...")
-
-	finder, err := search.NewFinder(&AppConfig)
-	if err != nil {
-		log.Errorln("Couldn't configure a new finder", err)
-		return
-	}
 
 	// Query for anything older than the decommission age with the configured filters and status created
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
@@ -561,14 +561,8 @@ func decommission() {
 }
 
 // destroy runs the routine to search for resources with renewed_at dates beyond the destroy age
-func destroy() {
+func destroy(finder search.Finder) {
 	log.Infoln("Launching Destroyer...")
-
-	finder, err := search.NewFinder(&AppConfig)
-	if err != nil {
-		log.Errorln("Couldn't configure a new finder", err)
-		return
-	}
 
 	// Query for anything older than the destroy age with the configured filters and status decom
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "decom"})

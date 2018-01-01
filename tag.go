@@ -58,10 +58,10 @@ func (t Tagger) Tag(tags map[string]string) error {
 	req.Header.Set("Auth-token", t.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := t.Client.Do(req)
-	defer res.Body.Close()
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 
 	if res.StatusCode > 299 {
 		return fmt.Errorf("Got a non-success http response from http PUT to %s, %d", url, res.StatusCode)

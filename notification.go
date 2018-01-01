@@ -47,10 +47,10 @@ func (n Notifier) Notify(params map[string]string) error {
 	req.Header.Set("Auth-token", n.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := n.Client.Do(req)
-	defer res.Body.Close()
 	if err != nil {
 		return err
 	}
+	defer res.Body.Close()
 
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
