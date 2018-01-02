@@ -15,15 +15,18 @@ type Destroyer struct {
 	Token      string
 	ResourceID string
 	Org        string
+	Client     HTTPClient
 }
 
 // NewDestroyer creates a new destruction object
 func NewDestroyer(endpoint, token, id, org string) Destroyer {
+	client := &http.Client{Timeout: 30 * time.Second}
 	return Destroyer{
 		Endpoint:   endpoint,
 		Token:      token,
 		ResourceID: id,
 		Org:        org,
+		Client:     client,
 	}
 }
 
@@ -31,12 +34,10 @@ func NewDestroyer(endpoint, token, id, org string) Destroyer {
 func (d Destroyer) Destroy() error {
 	log.Debugf("Destroying with endpoint: %s, resource: %s, org: %s  ", d.Endpoint, d.ResourceID, d.Org)
 
-	client := &http.Client{Timeout: 30 * time.Second}
-
 	url := fmt.Sprintf("%s/%s/%s", d.Endpoint, d.Org, d.ResourceID)
 	log.Debugf("Generated URL for delete request: %s", url)
 
-	req, err := http.NewRequest("DELETE", url, bytes.NewReader([]byte{}))
+	req, err := http.NewRequest(http.MethodDelete, url, bytes.NewReader([]byte{}))
 	if err != nil {
 		return err
 	}
@@ -44,7 +45,7 @@ func (d Destroyer) Destroy() error {
 	req.Header.Set("X-Forwarded-User", "reaper")
 	req.Header.Set("Auth-token", d.Token)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := client.Do(req)
+	res, err := d.Client.Do(req)
 	if err != nil {
 		return err
 	}

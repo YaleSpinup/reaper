@@ -1,13 +1,20 @@
 # build stage
 FROM golang:alpine AS build-env
+
+ARG version=0.0.0
+ARG prerelease
+ARG githash="Not set"
+ARG buildstamp="Not set"
+
 WORKDIR /go
 ENV GOPATH=/go
 ADD . /go/src/git.yale.edu/spinup/reaper/
-RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
+RUN go build -o reaper -ldflags "-X main.Version=$version -X main.VersionPrerelease=$prerelease -X main.githash=$githash -X main.buildstamp=$buildstamp" src/git.yale.edu/spinup/reaper/*.go
+RUN  ./reaper -version
 
 # final stage
 FROM alpine
-MAINTAINER Camden Fisher <camden.fisher@yale.edu>
+LABEL maintainer="Camden Fisher <camden.fisher@yale.edu>"
 
 WORKDIR /app
 COPY --from=build-env /go/reaper /app/reaper

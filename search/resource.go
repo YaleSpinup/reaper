@@ -5,11 +5,11 @@ type Resource struct {
 	Account    string
 	CreatedBy  string `json:"yale:created_by"`
 	ID         string
-	Name       string `json:"name, omitempty"`
+	Name       string `json:"name,omitempty"`
 	Provider   string
 	Status     string
-	RenewedAt  string `json:"yale:renewed_at, omitempty"`
-	NotifiedAt string `json:"yale:notified_at, omitempty"`
-	FQDN       string `json:"yale:fqdn, omitempty"`
-	Org        string `json:"yale:org, omitempty"`
+	RenewedAt  string `json:"yale:renewed_at,omitempty"`
+	NotifiedAt string `json:"yale:notified_at,omitempty"`
+	FQDN       string `json:"yale:fqdn,omitempty"`
+	Org        string `json:"yale:org,omitempty"`
 }

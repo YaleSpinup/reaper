@@ -49,7 +49,7 @@ func NewSlackReporter(options map[string]string) (*SlackReporter, error) {
 	return &r, nil
 }
 
-func (r *SlackReporter) Report(e *Event) error {
+func (r *SlackReporter) Report(e Event) error {
 	log.Infof("Reporting event via Slack: %s", e.Message)
 
 	data, err := json.Marshal(struct {

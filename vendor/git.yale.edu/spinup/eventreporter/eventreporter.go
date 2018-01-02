@@ -17,7 +17,7 @@ type Event struct {
 }
 
 type Reporter interface {
-	Report(*Event) error
+	Report(Event) error
 }
 
 type HTTPClient interface {
