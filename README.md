@@ -74,6 +74,33 @@ Configures the connection to elasticsearch.  The Reaper uses elasticsearch to fi
 ```
 
 
+### User Datasource
+
+Configures the datasource for user information (first, last, email, etc) used for sending notifications.  Currently this only
+supports the `rest` type.
+
+```json
+"userDatasource": {
+  "type": "rest",
+  "endpoint": "http://127.0.0.1:8888/api/v1/users",
+  "token": "12345"
+}
+```
+
+### Email
+
+Configures the email provider details.
+
+```json
+"email": {
+  "mailserver": "mail.yale.edu",
+  "from": "spinup@yale.edu",
+  "username": "",
+  "password": ""
+}
+```
+
+
 ### Filter
 
 Filters act as safeguards or limits on the searches done in elasticsearch.  The are converted to keywords and passed to elasticsearch
@@ -107,28 +134,14 @@ becomes the following filter in elasticsearch
 ### Notifications
 
 When instances reach a certain age, owners are notified that they need to "renew" their instances or they will be reclaimed.  Notifications
-are currently done by `POST`ing the following (example) data an endpoint:
-
-```json
-{
-  "netid": "cf322",
-  "link": "http://reaper.co/fountain/of/youth",
-  "expire_on":  "2006/01/02 15:04:05",
-  "renewed_at": "2006/01/02 15:04:05",
-  "fqdn": "scythe.internal.yale.edu",
-}
-```
-
-The ages and endpoint connection details are configured in `config.json`:
+are currently done by sending email which is configured in the `email` section above.  The ages are configured in `config.json`:
 
 ```json
 "notify": {
   "age": [
     "23d",
     "29d"
-  ],
-  "endpoint": "http://127.0.0.1:8888/v1/notify",
-  "token": "12345"
+  ]
 }
 ```
 

@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/fortytw2/leaktest"
+  packages = ["."]
+  revision = "7dad53304f9614c1c365755c1176a8e876fee3e8"
+  version = "v1.1.0"
+
+[[projects]]
   name = "github.com/sirupsen/logrus"
   packages = ["."]
   revision = "d682213848ed68c0a260ca37d6dd5ace8423f5ba"
@@ -22,6 +28,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "97f3cd8b7a00b2b98fe58f834cf0d2f2c840a89809d15b451fdde156324ba6b1"
+  inputs-digest = "f607f634ce87400fe4692937e9b857435ba3fbc01f38e3d16218677565572b5c"
   solver-name = "gps-cdcl"
   solver-version = 1

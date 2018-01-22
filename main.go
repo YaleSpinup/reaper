@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"html/template"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -53,15 +55,14 @@ var (
 )
 
 // RenewalTemplate is the html template for the renewal endpoint
-// TODO: actually templatize it
 const RenewalTemplate = `
 <html>
 <head>
-<meta http-equiv="refresh" content="2;url=https://spinup.internal.yale.edu" />
+<meta http-equiv="refresh" content="2;url={{.RedirectURL}}" />
 <title>Success</title>
 </head>
 <body>
-Success. Redirecting to the <a href="https://spinup.internal.yale.edu">spinup portal</a>.
+Success! Redirecting to the <a href="{{.RedirectURL}}">spinup portal</a>.
 </body>
 </html>`
 
@@ -291,7 +292,8 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org)
-	if err = tagger.Tag(map[string]string{"yale:renewed_at": time.Now().Format("2006/01/02 15:04:05")}); err != nil {
+	newRenewedAt := time.Now().Format("2006/01/02 15:04:05")
+	if err = tagger.Tag(map[string]string{"yale:renewed_at": newRenewedAt}); err != nil {
 		log.Errorf("Failed to renew resource %s, %s", id, err.Error())
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Unable to process renewal, please try again later."))
@@ -302,10 +304,65 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 	log.Info(msg)
 	reportEvent(msg, report.INFO)
 
-	w.WriteHeader(http.StatusOK)
+	buffer := new(bytes.Buffer)
+	tmpl, err := template.New("renewalTemplate").Parse(RenewalTemplate)
+	if err != nil {
+		log.Errorf("Failed to parse the renewal template: %s", err)
+		http.Redirect(w, r, AppConfig.RedirectURL, 302)
+	} else {
+		err = tmpl.Execute(buffer, struct{ RedirectURL string }{RedirectURL: AppConfig.RedirectURL})
+		if err != nil {
+			log.Errorf("Failed to execute the renewal template: %s", err)
+			http.Redirect(w, r, AppConfig.RedirectURL, 302)
+		} else {
+			w.WriteHeader(http.StatusOK)
+			w.Write(buffer.Bytes())
+		}
+	}
 
-	// TODO: parse this template with redirect URL
-	w.Write([]byte(RenewalTemplate))
+	f, err := NewUserFetcher(AppConfig.UserDatasource)
+	if err != nil {
+		log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+		return
+	}
+	user, err := GetUserByID(f, resource.CreatedBy)
+	if err != nil {
+		log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
+		return
+	}
+
+	expireOn, err := GetDecomAt(newRenewedAt, AppConfig.Decommission.Age)
+	if err != nil {
+		log.Errorf("Unable to get the decomAt date for %s: %s", resource.ID, err)
+		return
+	}
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		loc = time.FixedZone("UTC", 0)
+	}
+
+	// generate the renewal confirmation email
+	body, err := ParseRenewalTemplate(map[string]string{
+		"first":     user.First,
+		"email":     user.Email,
+		"netid":     resource.CreatedBy,
+		"fqdn":      resource.FQDN,
+		"expire_on": expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
+		"spinupURL": AppConfig.RedirectURL,
+	})
+
+	if err != nil {
+		log.Errorf("Unable to get the parse the renewal template for %s: %s", resource.ID, err)
+		return
+	}
+
+	err = SendMail(AppConfig.Email.Mailserver, body, AppConfig.Email.From, AppConfig.Email.Password,
+		"Your Spinup TryIT server renewal", user.Email, AppConfig.Email.Username)
+
+	if err != nil {
+		log.Errorf("Failed sending the renewal confirmation email: %s", err)
+	}
 }
 
 // Start fires up the batching routine loop which will do a search for each step;
@@ -379,31 +436,24 @@ func notify(finder search.Finder) {
 	}
 
 	// loop over the returned resources
-	for _, r := range resources {
-		log.Debugf("Checking returned resource: %+v", r)
+	for _, resource := range resources {
+		log.Debugf("Checking returned resource: %+v", resource)
 
-		if r.Org == "" {
-			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+		if resource.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", resource.ID)
 			continue
 		}
 
 		// time of the last renewal
-		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", resource.RenewedAt)
 		if err != nil {
-			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", resource.ID, resource.RenewedAt, err.Error())
 			continue
 		}
-		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
-
-		decomAge, err := parseDuration(AppConfig.Decommission.Age)
-		if err != nil {
-			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, AppConfig.Decommission.Age, err.Error())
-			return
-		}
-		decomAt := renewedAt.Add(decomAge)
+		log.Infof("%s last renewed at %s", resource.ID, renewedAt.String())
 
 		renewalSecret := &RenewalSecret{
-			RenewedAt: r.RenewedAt,
+			RenewedAt: resource.RenewedAt,
 			Secret:    AppConfig.EncryptionSecret,
 		}
 		token, err := renewalSecret.GenerateRenewalToken()
@@ -411,24 +461,24 @@ func notify(finder search.Finder) {
 			log.Errorf("Failed to generate renewal token, %s", err.Error())
 			continue
 		}
-		renewalLink := fmt.Sprintf("%s/renew/%s?token=%s", AppConfig.BaseURL, r.ID, token)
+		renewalLink := fmt.Sprintf("%s/renew/%s?token=%s", AppConfig.BaseURL, resource.ID, token)
 		log.Debugf("Generated renewal link: %s", renewalLink)
 
-		if r.NotifiedAt == "" {
-			log.Infof("%s Notified At is not set, Notifying on age threshold %s", r.ID, ages[0])
-			err := sendNotification(r, renewalLink, decomAt, renewedAt)
+		if resource.NotifiedAt == "" {
+			log.Infof("%s Notified At is not set, Notifying on age threshold %s", resource.ID, ages[0])
+			err := sendNotification(resource, renewalLink, renewedAt)
 			if err != nil {
 				log.Errorf("Failed to notify. %s", err.Error())
 				continue
 			}
 		} else {
 			// time of the last notification
-			notifiedAt, err := time.Parse("2006/01/02 15:04:05", r.NotifiedAt)
+			notifiedAt, err := time.Parse("2006/01/02 15:04:05", resource.NotifiedAt)
 			if err != nil {
-				log.Errorf("%s Couldn't parse notified_at (%s) as a time value. %s", r.ID, r.NotifiedAt, err.Error())
+				log.Errorf("%s Couldn't parse notified_at (%s) as a time value. %s", resource.ID, resource.NotifiedAt, err.Error())
 				continue
 			}
-			log.Infof("%s last notified at %s", r.ID, notifiedAt.String())
+			log.Infof("%s last notified at %s", resource.ID, notifiedAt.String())
 
 			// range over the ages and check if we've notified since the age threshold was crossed
 			for _, age := range ages {
@@ -436,19 +486,19 @@ func notify(finder search.Finder) {
 
 				ageDuration, err := parseDuration(age)
 				if err != nil {
-					log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, age, err.Error())
+					log.Errorf("%s Couldn't parse %s as a duration. %s", resource.ID, age, err.Error())
 					// If we can't parse the age, stop trying and move on
 					break
 				}
 
 				// time the age threshold was crossed
 				ageThresholdAt := renewedAt.Add(ageDuration)
-				log.Debugf("%s %s age threshold: %s", r.ID, age, ageThresholdAt.String())
+				log.Debugf("%s %s age threshold: %s", resource.ID, age, ageThresholdAt.String())
 
 				if ageThresholdAt.Before(time.Now()) && notifiedAt.Before(ageThresholdAt) {
-					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
+					log.Infof("%s notified (%s) before age threshold (%s) was crossed (%s). Notifying", resource.ID, notifiedAt.String(), age, ageThresholdAt.String())
 
-					err := sendNotification(r, renewalLink, decomAt, renewedAt)
+					err := sendNotification(resource, renewalLink, renewedAt)
 					if err != nil {
 						log.Errorf("Failed to notify. %s", err.Error())
 					}
@@ -457,46 +507,93 @@ func notify(finder search.Finder) {
 					break
 				}
 
-				log.Debugf("%s has been notified (%s) since crossing the %s age threshold (%s)", r.ID, notifiedAt.String(), age, ageThresholdAt.String())
+				log.Debugf("%s has been notified (%s) since crossing the %s age threshold (%s)", resource.ID, notifiedAt.String(), age, ageThresholdAt.String())
 			}
 		}
 	}
 }
 
-func sendNotification(r *search.Resource, renewalLink string, decomAt, renewedAt time.Time) error {
-	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, r.ID, r.Org)
-	err := tagger.Tag(map[string]string{
-		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
-	})
-
+func sendNotification(resource *search.Resource, renewalLink string, renewedAt time.Time) error {
+	// try to get details about the user before we do _anything_ since it's the lightest touch
+	f, err := NewUserFetcher(AppConfig.UserDatasource)
 	if err != nil {
-		reportEvent(fmt.Sprintf("FAILED to update tag for %s (%s)", r.FQDN, r.ID), report.ERROR)
-		log.Errorf("Failed to update tag for %s, not notifying, %s", r.ID, err.Error())
+		log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+		return err
+	}
+	user, err := GetUserByID(f, resource.CreatedBy)
+	if err != nil {
+		log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
 		return err
 	}
 
-	reportEvent(fmt.Sprintf("Notifying %s for %s (%s)", r.CreatedBy, r.FQDN, r.ID), report.INFO)
-	err = NewNotifier(AppConfig.Notify.Endpoint, AppConfig.Notify.Token).Notify(map[string]string{
-		"netid":      r.CreatedBy,
-		"link":       renewalLink,
-		"expire_on":  decomAt.Format("2006/01/02 15:04:05"),
-		"renewed_at": renewedAt.Format("2006/01/02 15:04:05"),
-		"fqdn":       r.FQDN,
+	// tag the instance with the new notification date
+	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, resource.ID, resource.Org)
+	err = tagger.Tag(map[string]string{
+		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
 	})
 
+	// if we can't tag, then bail all together, I just can't go on....
 	if err != nil {
-		reportEvent(fmt.Sprintf("FAILED to send notification for %s (%s)", r.FQDN, r.ID), report.ERROR)
-		log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
+		reportEvent(fmt.Sprintf("FAILED to update tag for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+		log.Errorf("Failed to update tag for %s, not notifying, %s", resource.ID, err.Error())
+		return err
+	}
 
-		// if the notification failed, try to roll back the tag
+	// create a function for rolling back the tag if something fails
+	rollBackTag := func() {
 		err = tagger.Tag(map[string]string{
-			"yale:notified_at": r.NotifiedAt,
+			"yale:notified_at": resource.NotifiedAt,
 		})
 
 		if err != nil {
-			reportEvent(fmt.Sprintf("FAILED to roll back tag for %s (%s)", r.FQDN, r.ID), report.ERROR)
-			log.Errorf("Failed to roll back notified_at tag for %s, %s", r.ID, err.Error())
+			reportEvent(fmt.Sprintf("FAILED to roll back tag for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+			log.Errorf("Failed to roll back notified_at tag for %s, %s", resource.ID, err.Error())
 		}
+	}
+
+	reportEvent(fmt.Sprintf("Notifying %s for %s (%s)", resource.CreatedBy, resource.FQDN, resource.ID), report.INFO)
+
+	// get the date that the instance will expire
+	expireOn, err := GetDecomAt(resource.RenewedAt, AppConfig.Decommission.Age)
+	if err != nil {
+		log.Errorf("Unable to get the decomAt date for %s: %s", resource.ID, err)
+		return err
+	}
+
+	loc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		loc = time.FixedZone("UTC", 0)
+	}
+
+	// generate the warning email from the warning template
+	body, err := ParseWarningTemplate(map[string]string{
+		"first":      user.First,
+		"email":      user.Email,
+		"netid":      resource.CreatedBy,
+		"link":       renewalLink,
+		"expire_on":  expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
+		"renewed_at": renewedAt.In(loc).Format("2006/01/02 15:04:05 MST"),
+		"fqdn":       resource.FQDN,
+		"spinupURL":  AppConfig.RedirectURL,
+	})
+
+	// rollback the tag and bail if we're unable to parse the template with the given data
+	if err != nil {
+		reportEvent(fmt.Sprintf("FAILED to parse template for %s (%s), not sending email", resource.FQDN, resource.ID), report.ERROR)
+		log.Errorf("FAILED to parse template.  Rolling back notified_at tag to ''. %s", err.Error())
+		rollBackTag()
+		return err
+	}
+
+	// send the mail to the user notifying them that their instance will expire
+	err = SendMail(AppConfig.Email.Mailserver, body, AppConfig.Email.From, AppConfig.Email.Password,
+		"Please renew your Spinup TryIT server", user.Email, AppConfig.Email.Username)
+
+	// rollback the tag if we fail to send the email
+	if err != nil {
+		reportEvent(fmt.Sprintf("FAILED to send notification for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+		log.Errorf("Failed to notify.  Rolling back notified_at tag to ''. %s", err.Error())
+		rollBackTag()
 	}
 
 	return err
@@ -521,41 +618,89 @@ func decommission(finder search.Finder) {
 	}
 
 	// loop over the returned resources
-	for _, r := range resources {
-		log.Debugf("Checking returned resource: %+v", r)
+	for _, resource := range resources {
+		log.Debugf("Checking returned resource: %+v", resource)
 
-		if r.Org == "" {
-			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+		if resource.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", resource.ID)
 			continue
 		}
 
 		// time of the last renewal
-		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", resource.RenewedAt)
 		if err != nil {
-			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", resource.ID, resource.RenewedAt, err.Error())
 			continue
 		}
-		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
+		log.Infof("%s last renewed at %s", resource.ID, renewedAt.String())
 
 		destroyAge, err := parseDuration(AppConfig.Destroy.Age)
 		if err != nil {
-			log.Errorf("%s Couldn't parse %s as a duration. %s", r.ID, AppConfig.Destroy.Age, err.Error())
+			log.Errorf("%s Couldn't parse %s as a duration. %s", resource.ID, AppConfig.Destroy.Age, err.Error())
 			return
 		}
 		// Add the destroy age to the renewed_at date to get the destroy_at date
 		destroyAt := renewedAt.Add(destroyAge)
 
 		if destroyAt.Before(time.Now()) {
-			log.Warnf("%s has crossed the destroy threshold but hasn't been decommissioned (Destruction scheduled: %s)", r.ID, destroyAt.String())
+			log.Warnf("%s has crossed the destroy threshold but hasn't been decommissioned (Destruction scheduled: %s)", resource.ID, destroyAt.String())
 		}
 
-		log.Infof("%s has crossed the decommision threshold. (Destruction scheduled: %s)", r.ID, destroyAt.String())
+		log.Infof("%s has crossed the decommision threshold. (Destruction scheduled: %s)", resource.ID, destroyAt.String())
 
-		reportEvent(fmt.Sprintf("Decommissioning for %s (%s)", r.FQDN, r.ID), report.INFO)
-		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).SetStatus()
+		reportEvent(fmt.Sprintf("Decommissioning for %s (%s)", resource.FQDN, resource.ID), report.INFO)
+		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, resource.ID, resource.Org).SetStatus()
 		if err != nil {
-			reportEvent(fmt.Sprintf("FAILED to decommission for %s (%s)", r.FQDN, r.ID), report.ERROR)
-			log.Errorf("Unable to decommission %s, %s", r.ID, err.Error())
+			reportEvent(fmt.Sprintf("FAILED to decommission for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+			log.Errorf("Unable to decommission %s, %s", resource.ID, err.Error())
+			continue
+		}
+
+		// try to get details about the user so we can notify them that their instance has been decommissioned, note that we
+		// do this _after_ we decommission since we don't really care if we notified them and we want the decom to succeed even
+		// if we can't send the email.
+		f, err := NewUserFetcher(AppConfig.UserDatasource)
+		if err != nil {
+			log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+			continue
+		}
+		user, err := GetUserByID(f, resource.CreatedBy)
+		if err != nil {
+			log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
+			continue
+		}
+
+		// get the date that the instance will expire
+		expireOn, err := GetDecomAt(resource.RenewedAt, AppConfig.Decommission.Age)
+		if err != nil {
+			log.Errorf("Unable to get the decomAt date for %s: %s", resource.ID, err)
+			continue
+		}
+
+		loc, err := time.LoadLocation("America/New_York")
+		if err != nil {
+			loc = time.FixedZone("UTC", 0)
+		}
+
+		// generate the deom email
+		body, err := ParseDecomTemplate(map[string]string{
+			"first":     user.First,
+			"email":     user.Email,
+			"netid":     resource.CreatedBy,
+			"fqdn":      resource.FQDN,
+			"expire_on": expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
+			"spinupURL": AppConfig.RedirectURL,
+		})
+
+		if err != nil {
+			log.Errorf("Unable to get the parse the decom template for %s: %s", resource.ID, err)
+			continue
+		}
+
+		err = SendMail(AppConfig.Email.Mailserver, body, AppConfig.Email.From, AppConfig.Email.Password,
+			"Your Spinup TryIT server has been deleted", user.Email, AppConfig.Email.Username)
+		if err != nil {
+			log.Errorf("Failed sending the decom email: %s", err)
 		}
 	}
 }
@@ -579,34 +724,35 @@ func destroy(finder search.Finder) {
 	}
 
 	// loop over the returned resources
-	for _, r := range resources {
-		log.Debugf("Checking returned resource: %+v", r)
+	for _, resource := range resources {
+		log.Debugf("Checking returned resource: %+v", resource)
 
-		if r.Org == "" {
-			log.Errorf("Cannot operate on a resource without an org.  ID: %s", r.ID)
+		if resource.Org == "" {
+			log.Errorf("Cannot operate on a resource without an org.  ID: %s", resource.ID)
 			continue
 		}
 
 		// time of the last renewal
-		renewedAt, err := time.Parse("2006/01/02 15:04:05", r.RenewedAt)
+		renewedAt, err := time.Parse("2006/01/02 15:04:05", resource.RenewedAt)
 		if err != nil {
-			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", r.ID, r.RenewedAt, err.Error())
+			log.Errorf("%s Couldn't parse renewed_at (%s) as a time value. %s", resource.ID, resource.RenewedAt, err.Error())
 			continue
 		}
 
-		log.Infof("%s last renewed at %s", r.ID, renewedAt.String())
-		log.Infof("%s has crossed the destruction threshold.", r.ID)
+		log.Infof("%s last renewed at %s", resource.ID, renewedAt.String())
+		log.Infof("%s has crossed the destruction threshold.", resource.ID)
 
-		reportEvent(fmt.Sprintf("Destroying for %s (%s)", r.FQDN, r.ID), report.INFO)
-		err = NewDestroyer(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, r.ID, r.Org).Destroy()
+		reportEvent(fmt.Sprintf("Destroying for %s (%s)", resource.FQDN, resource.ID), report.INFO)
+		err = NewDestroyer(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, resource.ID, resource.Org).Destroy()
 		if err != nil {
-			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", r.FQDN, r.ID), report.ERROR)
-			log.Errorf("Unable to destroy %s, %s", r.ID, err.Error())
+			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+			log.Errorf("Unable to destroy %s, %s", resource.ID, err.Error())
 		}
 	}
 
 }
 
+// reportEvent loops over all of the configured event reporters and sends the event to those reporters
 func reportEvent(msg string, level report.Level) {
 	e := report.Event{
 		Message: msg,
@@ -619,4 +765,23 @@ func reportEvent(msg string, level report.Level) {
 			log.Errorf("Failed to report event (%s) %s", msg, err.Error())
 		}
 	}
+}
+
+// GetDecomAt centralizes the calculation of a decommission date
+func GetDecomAt(renewedAtString, decomAgeString string) (time.Time, error) {
+	var decomAt time.Time
+
+	// time of the last renewal
+	renewedAt, err := time.Parse("2006/01/02 15:04:05", renewedAtString)
+	if err != nil {
+		return decomAt, err
+	}
+
+	decomAge, err := parseDuration(decomAgeString)
+	if err != nil {
+		return decomAt, err
+	}
+
+	decomAt = renewedAt.Add(decomAge)
+	return decomAt, nil
 }

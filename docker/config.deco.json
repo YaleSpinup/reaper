@@ -3,14 +3,23 @@
   "searchEngine": {
     "endpoint": "{{ .api_elasticsearch_endpoint }}"
   },
+  "userDatasource": {
+    "type": "rest",
+    "endpoint": "{{ .api_user_datasource_endpoint }}",
+    "token": "{{ .api_user_datasource_token }}"
+  },
+  "email": {
+    "mailserver": "{{ .api_email_mailserver }}",
+    "from": "{{ .api_email_from }}",
+    "username": "{{ .api_email_username }}",
+    "password": "{{ .api_email_password }}"
+  },
   "filter": {
     "yale:subsidized": "true",
     "yale:org": "{{ .server_org }}"
   },
   "notify": {
-    "age": {{ .api_notify_ages }},
-    "endpoint": "{{ .api_notify_endpoint }}",
-    "token": "{{ .api_notify_token }}"
+    "age": {{ .api_notify_ages }}
   },
   "decommission": {
     "age": "{{ .api_decommission_age }}",
