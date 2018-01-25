@@ -29,30 +29,6 @@ pipeline {
                 }
             }
         }
-        stage('Build'){
-            steps {
-                sh 'cd $WORKSPACE && go build -o reaper-native -v git.yale.edu/spinup/reaper'
-                sh './reaper-native -version | awk \'{print $3}\'> reaper.version'
-                sh '''
-                    cd ${WORKSPACE}
-                    VERSION=`cat reaper.version`
-                    [[ !  -z  ${VERSION}  ]] && echo 'VERSION not found' && exit 1
-                    for GOOS in darwin linux; do
-                        for GOARCH in 386 amd64; do
-                            echo "Building $GOOS-$GOARCH"
-                            export GOOS=$GOOS
-                            export GOARCH=$GOARCH
-                            go build -o reaper-v${VERSION}-$GOOS-$GOARCH git.yale.edu/spinup/reaper
-                        done
-                    done
-                '''
-            }
-            post {
-                success {
-                    stash includes: 'reaper*', name: 'reaperBin'
-                }
-            }
-        }
     }
     options {
         buildDiscarder(logRotator(numToKeepStr:'3'))

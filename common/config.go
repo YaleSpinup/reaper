@@ -13,17 +13,27 @@ type Config struct {
 	BaseURL          string
 	Decommission     Decommissioner
 	Destroy          Destroyer
+	Email            Emailer
 	Filter           map[string]string
 	Interval         string
 	Listen           string
 	LogLevel         string
 	Notify           Notifier
 	SearchEngine     map[string]string
+	UserDatasource   map[string]string
 	Tagging          Tagging
 	EncryptionSecret string
 	RedirectURL      string
 	Token            string
 	EventReporters   map[string]map[string]string
+}
+
+// Emailer configures the email sending process
+type Emailer struct {
+	From       string
+	Mailserver string
+	Password   string
+	Username   string
 }
 
 // Notifier configures the notification process

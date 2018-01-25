@@ -12,8 +12,19 @@ var testConfig = []byte(
 		"searchEngine": {
 		  "endpoint": "http://127.0.0.1:9200"
 		},
+		"userDatasource": {
+			"type": "rest",
+			"endpoint": "http://127.0.0.1:8888/v1/users",
+			"token": "12345"
+		},
 		"filter": {
 		  "yale:subsidized": "true"
+		},
+		"email": {
+			"mailserver": "nofilter.thomas.hooker",
+			"from": "Nummy Nummy <nummy@stubborn.beauty>",
+			"username": "CounterWeight",
+			"password": "HeadWay"
 		},
 		"notify": {
 		  "age": [
@@ -21,9 +32,7 @@ var testConfig = []byte(
 			"20d",
 			"5d",
 			"25d"
-		  ],
-		  "endpoint": "http://127.0.0.1:8888/v1/notify",
-		  "token": "12345"
+		  ]
 		},
 		"decommission": {
 		  "age": "30d",
@@ -58,16 +67,25 @@ func TestReadConfig(t *testing.T) {
 			Endpoint: "http://127.0.0.1:8888/v1/destroy",
 			Token:    "12345",
 		},
+		Email: Emailer{
+			Mailserver: "nofilter.thomas.hooker",
+			From:       "Nummy Nummy <nummy@stubborn.beauty>",
+			Username:   "CounterWeight",
+			Password:   "HeadWay",
+		},
 		Filter:   map[string]string{"yale:subsidized": "true"},
 		Interval: "15s",
 		Listen:   "127.0.0.1:8080",
 		LogLevel: "debug",
 		Notify: Notifier{
-			Age:      []string{"1d", "20d", "5d", "25d"},
-			Endpoint: "http://127.0.0.1:8888/v1/notify",
-			Token:    "12345",
+			Age: []string{"1d", "20d", "5d", "25d"},
 		},
 		SearchEngine: map[string]string{"endpoint": "http://127.0.0.1:9200"},
+		UserDatasource: map[string]string{
+			"type":     "rest",
+			"endpoint": "http://127.0.0.1:8888/v1/users",
+			"token":    "12345",
+		},
 		Tagging: Tagging{
 			Endpoint: "http://127.0.0.1:8888/v1/servers",
 			Token:    "12345",
