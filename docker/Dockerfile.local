@@ -7,7 +7,7 @@ RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
 
 # final stage
 FROM alpine
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=build-env /go/reaper /app/reaper
 EXPOSE 80

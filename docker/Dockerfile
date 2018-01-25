@@ -20,7 +20,7 @@ WORKDIR /app
 COPY --from=build-env /go/reaper /app/reaper
 RUN chmod 555 /app/reaper
 
-RUN apk add --no-cache bash ca-certificates wget python gettext && \
+RUN apk add --no-cache bash ca-certificates wget python gettext tzdata && \
     wget -nv "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" && \
     unzip awscli-bundle.zip && \
     ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws && \
