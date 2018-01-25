@@ -2,6 +2,7 @@ package eventreporter_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/fortytw2/leaktest"
 
 	log "github.com/sirupsen/logrus"
 
@@ -49,12 +52,52 @@ func init() {
 }
 
 func TestEventReporter(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), time.Second)
+	defer leaktest.CheckContext(ctx, t)()
+
 	reporters, err := configureEventReporters()
 	if err != nil {
 		t.Errorf("Couldn't initialize event reporters: %s", err.Error())
 	}
 
 	reportEvent(reporters, "Some message being reported", report.INFO)
+}
+
+func TestConcurrentEventReporter(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 5*time.Second)
+	defer leaktest.CheckContext(ctx, t)()
+
+	reporters, err := configureEventReporters()
+	if err != nil {
+		t.Errorf("Couldn't initialize event reporters: %s", err.Error())
+	}
+
+	// run the reporter function 10 times
+	for i := 0; i < 10; i++ {
+		var wg sync.WaitGroup
+		wg.Add(4)
+		go func() {
+			defer wg.Done()
+			reportEvent(reporters, "Some superfluous event", report.DEBUG)
+		}()
+
+		go func() {
+			defer wg.Done()
+			reportEvent(reporters, "Some interesting event", report.INFO)
+		}()
+
+		go func() {
+			defer wg.Done()
+			reportEvent(reporters, "Some curious event", report.WARN)
+		}()
+
+		go func() {
+			defer wg.Done()
+			reportEvent(reporters, "Some terrifying event", report.ERROR)
+		}()
+
+		wg.Wait()
+	}
 }
 
 func BenchmarkEventReporter(b *testing.B) {

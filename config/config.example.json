@@ -3,17 +3,23 @@
   "searchEngine": {
     "endpoint": "http://127.0.0.1:9200"
   },
+  "userDatasource": {
+    "type": "rest",
+    "endpoint": "http://127.0.0.1:8888/api/v1/users",
+    "token": "12345"
+  },
+  "email": {
+    "mailserver": "mail.yale.edu",
+    "from": "Spinup <spinup@yale.edu>",
+    "username": "",
+    "password": ""
+  },
   "filter": {
     "yale:subsidized": "true",
     "yale:org": "fts"
   },
   "notify": {
-    "age": [
-      "23d",
-      "29d"
-    ],
-    "endpoint": "http://127.0.0.1:8888/v1/notify",
-    "token": "12345"
+    "age": ["23d", "29d"]
   },
   "decommission": {
     "age": "30d",
