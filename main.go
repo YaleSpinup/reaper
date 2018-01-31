@@ -300,7 +300,7 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := fmt.Sprintf("Renewed %s (%s) created by %s", resource.FQDN, id, resource.CreatedBy)
+	msg := fmt.Sprintf("Renewed %s (%s) created by %s", resource.FQDN, id, resource.SupportDepartmentContact)
 	log.Info(msg)
 	reportEvent(msg, report.INFO)
 
@@ -322,12 +322,12 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 
 	f, err := NewUserFetcher(AppConfig.UserDatasource)
 	if err != nil {
-		log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+		log.Errorf("Unable to configure user datasource for %s: %s", resource.SupportDepartmentContact, err)
 		return
 	}
-	user, err := GetUserByID(f, resource.CreatedBy)
+	user, err := GetUserByID(f, resource.SupportDepartmentContact)
 	if err != nil {
-		log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
+		log.Errorf("Unable to get details about user %s: %s", resource.SupportDepartmentContact, err)
 		return
 	}
 
@@ -346,7 +346,7 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 	body, err := ParseRenewalTemplate(map[string]string{
 		"first":     user.First,
 		"email":     user.Email,
-		"netid":     resource.CreatedBy,
+		"netid":     resource.SupportDepartmentContact,
 		"fqdn":      resource.FQDN,
 		"expire_on": expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
 		"spinupURL": AppConfig.RedirectURL,
@@ -517,12 +517,12 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 	// try to get details about the user before we do _anything_ since it's the lightest touch
 	f, err := NewUserFetcher(AppConfig.UserDatasource)
 	if err != nil {
-		log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+		log.Errorf("Unable to configure user datasource for %s: %s", resource.SupportDepartmentContact, err)
 		return err
 	}
-	user, err := GetUserByID(f, resource.CreatedBy)
+	user, err := GetUserByID(f, resource.SupportDepartmentContact)
 	if err != nil {
-		log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
+		log.Errorf("Unable to get details about user %s: %s", resource.SupportDepartmentContact, err)
 		return err
 	}
 
@@ -551,7 +551,7 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 		}
 	}
 
-	reportEvent(fmt.Sprintf("Notifying %s for %s (%s)", resource.CreatedBy, resource.FQDN, resource.ID), report.INFO)
+	reportEvent(fmt.Sprintf("Notifying %s for %s (%s)", resource.SupportDepartmentContact, resource.FQDN, resource.ID), report.INFO)
 
 	// get the date that the instance will expire
 	expireOn, err := GetDecomAt(resource.RenewedAt, AppConfig.Decommission.Age)
@@ -569,7 +569,7 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 	body, err := ParseWarningTemplate(map[string]string{
 		"first":      user.First,
 		"email":      user.Email,
-		"netid":      resource.CreatedBy,
+		"netid":      resource.SupportDepartmentContact,
 		"link":       renewalLink,
 		"expire_on":  expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
 		"renewed_at": renewedAt.In(loc).Format("2006/01/02 15:04:05 MST"),
@@ -661,12 +661,12 @@ func decommission(finder search.Finder) {
 		// if we can't send the email.
 		f, err := NewUserFetcher(AppConfig.UserDatasource)
 		if err != nil {
-			log.Errorf("Unable to configure user datasource for %s: %s", resource.CreatedBy, err)
+			log.Errorf("Unable to configure user datasource for %s: %s", resource.SupportDepartmentContact, err)
 			continue
 		}
-		user, err := GetUserByID(f, resource.CreatedBy)
+		user, err := GetUserByID(f, resource.SupportDepartmentContact)
 		if err != nil {
-			log.Errorf("Unable to get details about user %s: %s", resource.CreatedBy, err)
+			log.Errorf("Unable to get details about user %s: %s", resource.SupportDepartmentContact, err)
 			continue
 		}
 
@@ -686,7 +686,7 @@ func decommission(finder search.Finder) {
 		body, err := ParseDecomTemplate(map[string]string{
 			"first":     user.First,
 			"email":     user.Email,
-			"netid":     resource.CreatedBy,
+			"netid":     resource.SupportDepartmentContact,
 			"fqdn":      resource.FQDN,
 			"expire_on": expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
 			"spinupURL": AppConfig.RedirectURL,
