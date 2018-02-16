@@ -167,6 +167,8 @@ func startHTTPServer(cancel func()) *http.Server {
 
 	api := router.PathPrefix("/v1").Subrouter()
 	api.HandleFunc("/reaper/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte{})
@@ -179,6 +181,9 @@ func startHTTPServer(cancel func()) *http.Server {
 	api.Handle("/reaper/metrics", promhttp.Handler())
 
 	api.HandleFunc("/reaper/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Content-Type", "application/json")
+
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte{})
