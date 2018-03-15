@@ -428,7 +428,7 @@ func notify(finder search.Finder) {
 
 	// Query for anything older than the oldest age with the configured filters and status created
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
-	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+	resources, err := finder.DoDateRangeQuery("resources", "server", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
 		Lte:        lte,
@@ -610,7 +610,7 @@ func decommission(finder search.Finder) {
 
 	// Query for anything older than the decommission age with the configured filters and status created
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "created"})
-	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+	resources, err := finder.DoDateRangeQuery("resources", "server", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
 		Lte:        fmt.Sprintf("now-%s", AppConfig.Decommission.Age),
@@ -716,7 +716,7 @@ func destroy(finder search.Finder) {
 
 	// Query for anything older than the destroy age with the configured filters and status decom
 	termfilter := append(search.NewTermQueryList(AppConfig.Filter), search.TermQuery{Term: "status", Value: "decom"})
-	resources, err := finder.DoDateRangeQuery("resources", &search.DateRangeQuery{
+	resources, err := finder.DoDateRangeQuery("resources", "server", &search.DateRangeQuery{
 		Field:      "yale:renewed_at",
 		Format:     "YYYY/MM/dd HH:mm:ss",
 		Lte:        fmt.Sprintf("now-%s", AppConfig.Destroy.Age),
