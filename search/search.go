@@ -103,7 +103,7 @@ func (f *Finder) DoGet(index, rtype, id string) (*Resource, error) {
 }
 
 // DoDateRangeQuery searches elasticsearch for a variable number of date range queries
-func (f *Finder) DoDateRangeQuery(index string, drqs ...*DateRangeQuery) ([]*Resource, error) {
+func (f *Finder) DoDateRangeQuery(index, rtype string, drqs ...*DateRangeQuery) ([]*Resource, error) {
 	var resourceList []*Resource
 	log.Debugf("Client status: %s", f.Client.String())
 
@@ -114,7 +114,7 @@ func (f *Finder) DoDateRangeQuery(index string, drqs ...*DateRangeQuery) ([]*Res
 	}
 
 	// execute search on index
-	searchResult, err := f.Client.Search().Index(index).Query(q).Size(1000).Do(context.Background())
+	searchResult, err := f.Client.Search().Index(index).Query(q).Type(rtype).Size(1000).Do(context.Background())
 	if err != nil {
 		log.Errorln("Failed to execute search", err)
 		return nil, err
