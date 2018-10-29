@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'golang'
+            image 'golang:1.11'
         }
     }
     environment { 
@@ -9,18 +9,19 @@ pipeline {
         GIT_COMMITTER_EMAIL = 'jenkins@localhost'
         GIT_AUTHOR_NAME = 'jenkins'
         GIT_AUTHOR_EMAIL = 'jenkins@localhost'
-        GOPATH = "${WORKSPACE}"
+        GOPATH = "/go"
+        GOCACHE="/tmp/.cache"
     }
     stages {
         stage('Test') {
             steps {
                 sh '''
+                    cd /go && go get -u golang.org/x/lint/golint
+                    cd /go && go get -u github.com/tebeka/go2xunit
                     cd ${WORKSPACE}
-                    go get github.com/golang/lint/golint
-                    go get github.com/tebeka/go2xunit
-                    go get git.yale.edu/spinup/reaper/...
-                    ./bin/golint src/git.yale.edu/spinup/reaper/.. > lint.txt
-                    go test -v $(go list git.yale.edu/spinup/reaper/... | grep -v /vendor/) | ./bin/go2xunit -output tests.xml
+                    go get ./...
+                    /go/bin/golint ./.. > lint.txt
+                    go test -v $(go list ./... | grep -v /vendor/) | /go/bin/go2xunit -output tests.xml
                 '''
             }
             post {
