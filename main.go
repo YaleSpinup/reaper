@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	report "git.yale.edu/spinup/eventreporter"
+	report "github.com/YaleSpinup/eventreporter"
 
-	"git.yale.edu/spinup/reaper/common"
-	"git.yale.edu/spinup/reaper/reaper"
-	"git.yale.edu/spinup/reaper/search"
+	"github.com/YaleSpinup/reaper/common"
+	"github.com/YaleSpinup/reaper/reaper"
+	"github.com/YaleSpinup/reaper/search"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 

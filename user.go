@@ -89,7 +89,7 @@ func (u *RESTUserFetcher) FetchByID(id string) (*User, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("HTTP response from REST User Fetch by ID: %+v", res)
+	log.Debug("HTTP response from REST User Fetch by ID:", res)
 
 	defer func() {
 		err := res.Body.Close()

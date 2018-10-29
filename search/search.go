@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"git.yale.edu/spinup/reaper/common"
+	"github.com/YaleSpinup/reaper/common"
 	log "github.com/sirupsen/logrus"
 	elastic "gopkg.in/olivere/elastic.v5"
 )
