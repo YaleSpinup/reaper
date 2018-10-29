@@ -1,9 +1,14 @@
 # build stage
 FROM golang:alpine AS build-env
+RUN apk add --no-cache git openssh-client gcc musl-dev
+
 WORKDIR /go
 ENV GOPATH=/go
-ADD . /go/src/git.yale.edu/spinup/reaper/
-RUN go build -o reaper src/git.yale.edu/spinup/reaper/*.go
+ENV GO111MODULE=on
+RUN go version
+ADD . /go/src/github.com/YaleSpinup/reaper/
+RUN cd /go/src/github.com/YaleSpinup/reaper && go get ./...
+RUN cd /go/src/github.com/YaleSpinup/reaper && go build -o /go/reaper *.go
 
 # final stage
 FROM alpine

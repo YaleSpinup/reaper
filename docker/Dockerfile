@@ -1,15 +1,20 @@
 # build stage
 FROM golang:alpine AS build-env
 
-ARG version=0.0.0
-ARG prerelease
-ARG githash="Not set"
-ARG buildstamp="Not set"
+ARG version="0.0.0"
+ARG prerelease""
+ARG githash=""
+ARG buildstamp=""
+
+RUN apk add --no-cache git openssh-client gcc musl-dev
 
 WORKDIR /go
 ENV GOPATH=/go
-ADD . /go/src/git.yale.edu/spinup/reaper/
-RUN go build -o reaper -ldflags "-X main.Version=$version -X main.VersionPrerelease=$prerelease -X main.githash=$githash -X main.buildstamp=$buildstamp" src/git.yale.edu/spinup/reaper/*.go
+ENV GO111MODULE=on
+RUN go version
+ADD . /go/src/github.com/YaleSpinup/reaper/
+RUN cd /go/src/github.com/YaleSpinup/reaper && go get ./...
+RUN cd /go/src/github.com/YaleSpinup/reaper && go build -o /go/reaper -ldflags "-X main.Version=$version -X main.VersionPrerelease=$prerelease -X main.githash=$githash -X main.buildstamp=$buildstamp" *.go
 RUN  ./reaper -version
 
 # final stage
