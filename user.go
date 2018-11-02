@@ -83,7 +83,7 @@ func (u *RESTUserFetcher) FetchByID(id string) (*User, error) {
 	}
 
 	req.Header.Set("X-Forwarded-User", "reaper")
-	req.Header.Set("Auth-token", u.Token)
+	req.Header.Set("X-Auth-Token", u.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := u.Client.Do(req)
 	if err != nil {
