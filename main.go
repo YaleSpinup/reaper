@@ -522,12 +522,16 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 	// try to get details about the user before we do _anything_ since it's the lightest touch
 	f, err := NewUserFetcher(AppConfig.UserDatasource)
 	if err != nil {
-		log.Errorf("Unable to configure user datasource for %s: %s", resource.SupportDepartmentContact, err)
+		msg := fmt.Sprintf("Unable to configure user datasource for %s", resource.SupportDepartmentContact)
+		log.Error(msg+": "+err.Error(), resource.SupportDepartmentContact, err)
+		reportEvent("FAILED "+msg, report.ERROR)
 		return err
 	}
 	user, err := GetUserByID(f, resource.SupportDepartmentContact)
 	if err != nil {
-		log.Errorf("Unable to get details about user %s: %s", resource.SupportDepartmentContact, err)
+		msg := fmt.Sprintf("Unable to get details about user %s", resource.SupportDepartmentContact)
+		log.Error(msg + ": " + err.Error())
+		reportEvent("FAILED "+msg, report.ERROR)
 		return err
 	}
 
@@ -539,8 +543,9 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 
 	// if we can't tag, then bail all together, I just can't go on....
 	if err != nil {
-		reportEvent(fmt.Sprintf("FAILED to update tag for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
-		log.Errorf("Failed to update tag for %s, not notifying, %s", resource.ID, err.Error())
+		msg := fmt.Sprintf("Unable to update tag for %s (%s)", resource.FQDN, resource.ID)
+		log.Error(msg + ": " + err.Error())
+		reportEvent("FAILED"+msg, report.ERROR)
 		return err
 	}
 
@@ -551,8 +556,9 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 		})
 
 		if err != nil {
-			reportEvent(fmt.Sprintf("FAILED to roll back tag for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
-			log.Errorf("Failed to roll back notified_at tag for %s, %s", resource.ID, err.Error())
+			msg := fmt.Sprintf("Unable to roll back tag for %s (%s)", resource.FQDN, resource.ID)
+			reportEvent("FAILED "+msg, report.ERROR)
+			log.Errorf(msg + ": " + err.Error())
 		}
 	}
 
