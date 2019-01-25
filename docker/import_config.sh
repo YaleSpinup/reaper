@@ -12,8 +12,8 @@ if [ -n "$S3URL" ]; then
   fi
   aws --region us-east-1 s3 cp ${S3URL} ./config.encrypted
   aws --region us-east-1 kms decrypt --ciphertext-blob fileb://config.encrypted --output text --query Plaintext | base64 -d > deco-config.json
-  deco validate --file "deco-config.json" || exit 1
-  deco run --file "deco-config.json"
+  deco validate deco-config.json || exit 1
+  deco run deco-config.json
   rm -f deco-config.json config.encrypted
 else
   echo "ERROR: S3URL variable not set!"

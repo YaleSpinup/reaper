@@ -32,7 +32,7 @@ RUN apk add --no-cache bash ca-certificates wget python gettext tzdata && \
     /usr/local/bin/aws --version
 
 # Install Deco
-ARG DECO_VERSION=0.2.2
+ARG DECO_VERSION=0.3.1
 ARG DECO_OS=linux
 ARG DECO_ARCH=amd64
 ADD https://github.com/YaleUniversity/deco/releases/download/v${DECO_VERSION}/deco-v${DECO_VERSION}-${DECO_OS}-${DECO_ARCH} /usr/local/bin/deco
