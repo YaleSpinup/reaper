@@ -43,6 +43,14 @@
       "username": "Reaper"
     }
   },
+  "webhooks": [
+    {
+      "endpoint": "{{ .api_ui_decom_webhook }}",
+      "token": "{{ .api_ui_decom_webhook_token }}",,
+      "method": "POST",
+      "events": ["decom", "destroy"]
+    }
+  ],
   "interval": "{{ .reap_interval }}",
   "logLevel": "{{ .loglevel }}",
   "baseUrl": "{{ .api_base_url }}",

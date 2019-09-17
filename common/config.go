@@ -26,6 +26,7 @@ type Config struct {
 	RedirectURL      string
 	Token            string
 	EventReporters   map[string]map[string]string
+	Webhooks         []Webhook
 }
 
 // Emailer configures the email sending process
@@ -61,6 +62,14 @@ type Decommissioner struct {
 type Tagging struct {
 	Endpoint string
 	Token    string
+}
+
+// Webhook configures the webhook endpoints
+type Webhook struct {
+	Endpoint string
+	Token    string
+	Method   string
+	Actions  []string
 }
 
 // ReadConfig decodes the configuration from an io Reader

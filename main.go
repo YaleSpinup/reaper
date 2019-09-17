@@ -48,6 +48,9 @@ var (
 	// EventReporters is a slice of reporting endpoints
 	EventReporters []report.Reporter
 
+	// Webhooks is a slice of webhook providers
+	Webhooks []Webhook
+
 	globalWg sync.WaitGroup
 
 	configFileName = flag.String("config", "config/config.json", "Configuration file.")
@@ -112,6 +115,11 @@ func main() {
 
 	reportEvent(fmt.Sprintf("Starting reaper %s%s (%s)", Version, VersionPrerelease, AppConfig.BaseURL), report.INFO)
 
+	err = configureWebhooks()
+	if err != nil {
+		log.Fatalln("Couldn't initialize web hooks", err)
+	}
+
 	// Setup context to allow goroutines to be cancelled
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -156,6 +164,19 @@ func configureEventReporters() error {
 			msg := fmt.Sprintf("Unknown event reporter name, %s", name)
 			return errors.New(msg)
 		}
+	}
+
+	return nil
+}
+
+func configureWebhooks() error {
+	for _, webhook := range AppConfig.Webhooks {
+		wh, err := NewWebhook(webhook)
+		if err != nil {
+			return err
+		}
+
+		Webhooks = append(Webhooks, wh)
 	}
 
 	return nil
@@ -476,6 +497,11 @@ func notify(finder search.Finder) {
 				log.Errorf("Failed to notify. %s", err.Error())
 				continue
 			}
+
+			sendWebhooks(&Event{
+				ID:     resource.ID,
+				Action: "notify",
+			})
 		} else {
 			// time of the last notification
 			notifiedAt, err := time.Parse("2006/01/02 15:04:05", resource.NotifiedAt)
@@ -507,6 +533,11 @@ func notify(finder search.Finder) {
 					if err != nil {
 						log.Errorf("Failed to notify. %s", err.Error())
 					}
+
+					sendWebhooks(&Event{
+						ID:     resource.ID,
+						Action: "notify",
+					})
 
 					// stop notifying if we matched
 					break
@@ -667,6 +698,11 @@ func decommission(finder search.Finder) {
 			continue
 		}
 
+		sendWebhooks(&Event{
+			ID:     resource.ID,
+			Action: "decom",
+		})
+
 		// try to get details about the user so we can notify them that their instance has been decommissioned, note that we
 		// do this _after_ we decommission since we don't really care if we notified them and we want the decom to succeed even
 		// if we can't send the email.
@@ -693,7 +729,7 @@ func decommission(finder search.Finder) {
 			loc = time.FixedZone("UTC", 0)
 		}
 
-		// generate the deom email
+		// generate the decom email
 		body, err := ParseDecomTemplate(map[string]string{
 			"first":     user.First,
 			"email":     user.Email,
@@ -759,6 +795,11 @@ func destroy(finder search.Finder) {
 			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
 			log.Errorf("Unable to destroy %s, %s", resource.ID, err.Error())
 		}
+
+		sendWebhooks(&Event{
+			ID:     resource.ID,
+			Action: "destroy",
+		})
 	}
 
 }
@@ -774,6 +815,16 @@ func reportEvent(msg string, level report.Level) {
 		err := r.Report(e)
 		if err != nil {
 			log.Errorf("Failed to report event (%s) %s", msg, err.Error())
+		}
+	}
+}
+
+// sendWebhooks loops over all of the configured webhooks and sends them
+func sendWebhooks(e *Event) {
+	for _, wh := range Webhooks {
+		err := wh.Send(context.TODO(), e)
+		if err != nil {
+			log.Errorf("Failed to send webhook (%s) %s", wh.Endpoint, err.Error())
 		}
 	}
 }
