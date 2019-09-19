@@ -50,7 +50,7 @@ func (wh Webhook) Send(ctx context.Context, event *Event) error {
 		if event.Action == e {
 			log.Infof("sending webhook event %+v with %+v", event, wh)
 			switch wh.Method {
-			case http.MethodGet, http.MethodHead:
+			case http.MethodGet, http.MethodHead, http.MethodDelete, http.MethodOptions:
 				url := fmt.Sprintf("%s?id=%s&action=%s", wh.Endpoint, event.ID, event.Action)
 				req, err := http.NewRequestWithContext(ctx, wh.Method, url, nil)
 				if err != nil {
@@ -103,7 +103,8 @@ func (wh Webhook) Send(ctx context.Context, event *Event) error {
 					return errors.New(msg)
 				}
 			default:
-				log.Warnf("unsupported http method for sending webhook: %s, skipping", wh.Method)
+				msg := fmt.Sprintf("unsupported http method for sending webhook: %s, skipping", wh.Method)
+				return errors.New(msg)
 			}
 			return nil
 		}

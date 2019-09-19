@@ -46,7 +46,7 @@
   "webhooks": [
     {
       "endpoint": "{{ .api_ui_decom_webhook }}",
-      "token": "{{ .api_ui_decom_webhook_token }}",,
+      "token": "{{ .api_ui_decom_webhook_token }}",
       "method": "POST",
       "events": ["decom", "destroy"]
     }
