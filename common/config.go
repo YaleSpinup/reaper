@@ -24,6 +24,8 @@ type Config struct {
 	Tagging          Tagging
 	EncryptionSecret string
 	RedirectURL      string
+	SpinupURL        string
+	SpinupSiteURL    string
 	Token            string
 	EventReporters   map[string]map[string]string
 	Webhooks         []Webhook

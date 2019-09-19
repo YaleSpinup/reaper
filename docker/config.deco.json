@@ -48,7 +48,7 @@
       "endpoint": "{{ .api_ui_decom_webhook }}",
       "token": "{{ .api_ui_decom_webhook_token }}",
       "method": "POST",
-      "events": ["decom", "destroy"]
+      "events": ["decommission", "destroy"]
     }
   ],
   "interval": "{{ .reap_interval }}",
@@ -56,5 +56,7 @@
   "baseUrl": "{{ .api_base_url }}",
   "encryptionSecret": "{{ .api_encryption_secret }}",
   "redirectUrl": "{{ .api_redirect_url }}",
+  "spinupUrl": "{{ .api_redirect_url }}",
+  "spinupSiteUrl": "https://spinup.yalepages.org",
   "token": "{{ .api_token }}"
 }

@@ -370,12 +370,13 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 
 	// generate the renewal confirmation email
 	body, err := ParseRenewalTemplate(map[string]string{
-		"first":     user.First,
-		"email":     user.Email,
-		"netid":     resource.SupportDepartmentContact,
-		"fqdn":      resource.FQDN,
-		"expire_on": expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
-		"spinupURL": AppConfig.RedirectURL,
+		"first":         user.First,
+		"email":         user.Email,
+		"netid":         resource.SupportDepartmentContact,
+		"fqdn":          resource.FQDN,
+		"expire_on":     expireOn.In(loc).Format("2006/01/02 15:04:05 MST"),
+		"spinupURL":     AppConfig.SpinupURL,
+		"spinupSiteURL": AppConfig.SpinupSiteURL,
 	})
 
 	if err != nil {
@@ -700,7 +701,7 @@ func decommission(finder search.Finder) {
 
 		sendWebhooks(&Event{
 			ID:     resource.ID,
-			Action: "decom",
+			Action: "decommission",
 		})
 
 		// try to get details about the user so we can notify them that their instance has been decommissioned, note that we
