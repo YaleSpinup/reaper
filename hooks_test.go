@@ -13,10 +13,8 @@ import (
 )
 
 var (
-	testHookEndpoint = "http://127.0.0.1/v1/hook"
-	testHookToken    = "xypdq"
-	testHookID       = "i-abc123"
-	testHookClient   = NewMockClient([]byte("ok"), 200)
+	testHookToken  = "xypdq"
+	testHookClient = NewMockClient([]byte("ok"), 200)
 )
 
 func TestNewWebhook(t *testing.T) {
@@ -68,12 +66,6 @@ func TestSendWebhook(t *testing.T) {
 		}
 
 		t.Logf("received %s event from webhook: %+v", r.Method, event)
-
-		if event.Action != "party" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("bad action: " + event.Action + ", expected 'party'"))
-			return
-		}
 
 		if event.ID != "i-123456789" {
 			w.WriteHeader(http.StatusBadRequest)

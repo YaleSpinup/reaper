@@ -237,7 +237,6 @@ func startHTTPServer(cancel func()) *http.Server {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 		cancel()
-		return
 	})
 
 	api.HandleFunc("/reaper/renew/{id:[A-Za-z0-9-]+}", RenewalHander)
@@ -802,7 +801,6 @@ func destroy(finder search.Finder) {
 			Action: "destroy",
 		})
 	}
-
 }
 
 // reportEvent loops over all of the configured event reporters and sends the event to those reporters
@@ -823,9 +821,16 @@ func reportEvent(msg string, level report.Level) {
 // sendWebhooks loops over all of the configured webhooks and sends them
 func sendWebhooks(e *Event) {
 	for _, wh := range Webhooks {
-		err := wh.Send(context.TODO(), e)
-		if err != nil {
-			log.Errorf("Failed to send webhook (%s) %s", wh.Endpoint, err.Error())
+		log.Debugf("processing webhook %s", wh.Endpoint)
+
+		for _, whAction := range wh.Actions {
+			log.Debugf("checking webhook action %s agains event action %s", whAction, e.Action)
+			if e.Action == whAction {
+				err := wh.Send(context.TODO(), e)
+				if err != nil {
+					log.Errorf("Failed to send webhook (%s) %s", wh.Endpoint, err.Error())
+				}
+			}
 		}
 	}
 }
