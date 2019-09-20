@@ -89,6 +89,8 @@ func (wh Webhook) Send(ctx context.Context, event *Event) error {
 			req.Header.Add("X-Auth-Token", wh.Token)
 		}
 
+		req.Header.Add("Content-Type", "application/json")
+
 		res, err := wh.Client.Do(req)
 		if err != nil {
 			return err

@@ -59,6 +59,12 @@ func TestSendWebhook(t *testing.T) {
 				w.Write([]byte("unable to decode JSON request: " + err.Error()))
 				return
 			}
+
+			if ct := r.Header.Get("Content-Type"); ct != "application/json" {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte("missing content-type header '" + ct + "'"))
+				return
+			}
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			w.Write([]byte("unexpected method: " + r.Method))
