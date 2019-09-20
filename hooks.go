@@ -17,7 +17,7 @@ import (
 // Event is the data for an event
 type Event struct {
 	Action string `json:"action"`
-	ID     string `json:"server_id"`
+	ID     string `json:"id"`
 }
 
 // Webhook is the configuration for a webhook
