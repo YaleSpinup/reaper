@@ -48,7 +48,7 @@
       "endpoint": "{{ .api_ui_decom_webhook }}",
       "token": "{{ .api_ui_decom_webhook_token }}",
       "method": "POST",
-      "events": ["decommission", "destroy"]
+      "actions": ["decommission", "destroy"]
     }
   ],
   "interval": "{{ .reap_interval }}",
