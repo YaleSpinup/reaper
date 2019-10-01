@@ -43,10 +43,20 @@
       "username": "Reaper"
     }
   },
+  "webhooks": [
+    {
+      "endpoint": "http://127.0.0.1:8888/v1/hook",
+      "method": "GET",
+      "token": "12345",
+      "events": ["decommission"]
+    }
+  ],
   "interval": "120s",
   "logLevel": "info",
   "baseUrl": "http://127.0.0.1:8080/v1/reaper",  
   "redirectUrl": "https://spinup.internal.yale.edu",
+  "spinupUrl": "https://spinup.internal.yale.edu",
+  "spinupSiteUrl": "https://spinup.yalepages.org",
   "encryptionSecret": "super-sekret-token",
   "token": "super-er-sekret-token"
 }

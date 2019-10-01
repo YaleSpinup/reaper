@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: reaper-config-json
+type: Opaque
+data:
+  config.json: # replace with base64 encoded configuration `cat config/config.json| base64`

@@ -28,6 +28,7 @@ var warningTemplate = `
       Cheers,<br />
 			Spinup Team<br />
 			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+			<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
     </p>
   </body>
 </html>
@@ -48,6 +49,7 @@ var decomTemplate = `
       Cheers,<br />
 			Spinup Team<br />
 			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+			<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
     </p>
   </body>
 </html>
@@ -68,6 +70,7 @@ var renewalTemplate = `
         Cheers,<br />
 				Spinup Team<br />
 				<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+				<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
       </p>
     </body>
 </html>
@@ -111,19 +114,21 @@ func ParseWarningTemplate(params map[string]string) (string, error) {
 
 	buffer := new(bytes.Buffer)
 	err = tmpl.Execute(buffer, struct {
-		ExpireOn    string
-		FirstName   string
-		NetID       string
-		FQDN        string
-		RenewalLink string
-		SpinupURL   string
+		ExpireOn      string
+		FirstName     string
+		NetID         string
+		FQDN          string
+		RenewalLink   string
+		SpinupURL     string
+		SpinupSiteURL string
 	}{
-		ExpireOn:    params["expire_on"],
-		FirstName:   params["first"],
-		NetID:       params["netid"],
-		FQDN:        params["fqdn"],
-		RenewalLink: params["link"],
-		SpinupURL:   params["spinupURL"],
+		ExpireOn:      params["expire_on"],
+		FirstName:     params["first"],
+		NetID:         params["netid"],
+		FQDN:          params["fqdn"],
+		RenewalLink:   params["link"],
+		SpinupURL:     params["spinupURL"],
+		SpinupSiteURL: params["spinupSiteURL"],
 	})
 	if err != nil {
 		return "", err
@@ -141,17 +146,19 @@ func ParseRenewalTemplate(params map[string]string) (string, error) {
 
 	buffer := new(bytes.Buffer)
 	err = tmpl.Execute(buffer, struct {
-		ExpireOn  string
-		FirstName string
-		NetID     string
-		FQDN      string
-		SpinupURL string
+		ExpireOn      string
+		FirstName     string
+		NetID         string
+		FQDN          string
+		SpinupURL     string
+		SpinupSiteURL string
 	}{
-		ExpireOn:  params["expire_on"],
-		FirstName: params["first"],
-		NetID:     params["netid"],
-		FQDN:      params["fqdn"],
-		SpinupURL: params["spinupURL"],
+		ExpireOn:      params["expire_on"],
+		FirstName:     params["first"],
+		NetID:         params["netid"],
+		FQDN:          params["fqdn"],
+		SpinupURL:     params["spinupURL"],
+		SpinupSiteURL: params["spinupSiteURL"],
 	})
 	if err != nil {
 		return "", err
@@ -169,17 +176,19 @@ func ParseDecomTemplate(params map[string]string) (string, error) {
 
 	buffer := new(bytes.Buffer)
 	err = tmpl.Execute(buffer, struct {
-		ExpireOn  string
-		FirstName string
-		NetID     string
-		FQDN      string
-		SpinupURL string
+		ExpireOn      string
+		FirstName     string
+		NetID         string
+		FQDN          string
+		SpinupURL     string
+		SpinupSiteURL string
 	}{
-		ExpireOn:  params["expire_on"],
-		FirstName: params["first"],
-		NetID:     params["netid"],
-		FQDN:      params["fqdn"],
-		SpinupURL: params["spinupURL"],
+		ExpireOn:      params["expire_on"],
+		FirstName:     params["first"],
+		NetID:         params["netid"],
+		FQDN:          params["fqdn"],
+		SpinupURL:     params["spinupURL"],
+		SpinupSiteURL: params["spinupSiteURL"],
 	})
 	if err != nil {
 		return "", err
