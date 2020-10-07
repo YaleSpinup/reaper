@@ -1,19 +1,19 @@
 # build stage
 FROM golang:alpine AS build-env
 RUN apk add --no-cache git openssh-client gcc musl-dev
-
-WORKDIR /go
-ENV GOPATH=/go
-ENV GO111MODULE=on
-RUN go version
-ADD . /go/src/github.com/YaleSpinup/reaper/
-RUN cd /go/src/github.com/YaleSpinup/reaper && go get ./...
-RUN cd /go/src/github.com/YaleSpinup/reaper && go build -o /go/reaper *.go
+RUN mkdir /app
+WORKDIR /app
+COPY go.mod .
+COPY go.sum .
+RUN go mod download
+COPY . .
+RUN go test ./... -cover
+RUN go build -o /app/api *.go
 
 # final stage
 FROM alpine
 RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
-COPY --from=build-env /go/reaper /app/reaper
+COPY --from=build-env /app/api /app/api
 EXPOSE 80
-ENTRYPOINT ["./reaper"]
+ENTRYPOINT ["./api"]
