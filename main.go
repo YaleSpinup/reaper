@@ -17,6 +17,7 @@ import (
 	"time"
 
 	report "github.com/YaleSpinup/eventreporter"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/YaleSpinup/reaper/common"
 	"github.com/YaleSpinup/reaper/reaper"
@@ -234,6 +235,18 @@ func startHTTPServer(cancel func()) *http.Server {
 
 	api.HandleFunc("/reaper/shutdown", func(w http.ResponseWriter, r *http.Request) {
 		log.Infoln("Received shutdown request, cancelling goroutines.")
+
+		log.Debugf("Authenticating token for protected URL '%s'", r.URL)
+
+		htoken := r.Header.Get("X-Auth-Token")
+		if err := bcrypt.CompareHashAndPassword([]byte(htoken), []byte(AppConfig.Token)); err != nil {
+			log.Warnf("Unable to authenticate session for '%s' with '%s'", r.URL, htoken)
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		log.Infof("Successfully authenticated token for URL '%s'", r.URL)
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 		cancel()
