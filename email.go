@@ -27,7 +27,7 @@ var warningTemplate = `
     <p>
       Cheers,<br />
 			Spinup Team<br />
-			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a><br />
 			<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
     </p>
   </body>
@@ -48,7 +48,7 @@ var decomTemplate = `
     <p>
       Cheers,<br />
 			Spinup Team<br />
-			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+			<a href="{{.SpinupURL}}">{{.SpinupURL}}</a><br />
 			<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
     </p>
   </body>
@@ -69,7 +69,7 @@ var renewalTemplate = `
       <p>
         Cheers,<br />
 				Spinup Team<br />
-				<a href="{{.SpinupURL}}">{{.SpinupURL}}</a>
+				<a href="{{.SpinupURL}}">{{.SpinupURL}}</a><br />
 				<a href="{{.SpinupSiteURL}}">{{.SpinupSiteURL}}</a>
       </p>
     </body>
