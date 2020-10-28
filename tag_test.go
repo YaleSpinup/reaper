@@ -7,12 +7,13 @@ import (
 )
 
 var (
-	testTagEndpoint   = "http://127.0.0.1/v1/servers"
-	testTagToken      = "xypdq"
-	testTagResourceID = "i-abc123"
-	testTagOrg        = "complaintdept"
-	testTagClient     = NewMockClient([]byte("ok"), 200)
-	testTagger        = Tagger{
+	testTagEndpoint     = "http://127.0.0.1/v1/servers"
+	testTagToken        = "xypdq"
+	testTagResourceID   = "i-abc123"
+	testTagOrg          = "complaintdept"
+	testTagEncryptToken = false
+	testTagClient       = NewMockClient([]byte("ok"), 200)
+	testTagger          = Tagger{
 		Endpoint:   testTagEndpoint,
 		Token:      testTagToken,
 		ResourceID: testTagResourceID,
@@ -22,7 +23,11 @@ var (
 )
 
 func TestNewTagger(t *testing.T) {
-	actual := NewTagger(testTagEndpoint, testTagToken, testTagResourceID, testTagOrg)
+	actual, err := NewTagger(testTagEndpoint, testTagToken, testTagResourceID, testTagOrg, testTagEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new tagger, got %s", err)
+	}
+
 	actual.Client = testTagClient
 
 	if !reflect.DeepEqual(testTagger, actual) {
@@ -36,7 +41,10 @@ func TestTag(t *testing.T) {
 		"baz": "biz",
 	}
 
-	tagger := NewTagger(testTagEndpoint, testTagToken, testTagResourceID, testTagOrg)
+	tagger, err := NewTagger(testTagEndpoint, testTagToken, testTagResourceID, testTagOrg, testTagEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new tagger, got %s", err)
+	}
 
 	successClient := NewMockClient([]byte("ok"), 200)
 	successClient.Method = http.MethodPut
@@ -47,7 +55,7 @@ func TestTag(t *testing.T) {
 	}
 
 	tagger.Client = successClient
-	err := tagger.Tag(tags)
+	err = tagger.Tag(tags)
 	if err != nil {
 		t.Error("Expected successful tag, got", err)
 	}

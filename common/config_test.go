@@ -37,16 +37,19 @@ var testConfig = []byte(
 		"decommission": {
 		  "age": "30d",
 		  "endpoint": "http://127.0.0.1:8888/v1/decom",
-		  "token": "12345"
+		  "token": "12345",
+		  "encryptToken": true
 		},
 		"destroy": {
 		  "age": "44d",
 		  "endpoint": "http://127.0.0.1:8888/v1/destroy",
-		  "token": "12345"
+		  "token": "12345",
+		  "encryptToken": true
 		},
 		"tagging": {
 		  "endpoint": "http://127.0.0.1:8888/v1/servers",
-		  "token": "12345"
+		  "token": "12345",
+		  "encryptToken": true
 		},
 		"interval": "15s",
 		"logLevel": "debug",
@@ -58,14 +61,16 @@ func TestReadConfig(t *testing.T) {
 	expectedConfig := Config{
 		BaseURL: "http://127.0.0.1:8080/v1/reaper",
 		Decommission: Decommissioner{
-			Age:      "30d",
-			Endpoint: "http://127.0.0.1:8888/v1/decom",
-			Token:    "12345",
+			Age:          "30d",
+			Endpoint:     "http://127.0.0.1:8888/v1/decom",
+			Token:        "12345",
+			EncryptToken: true,
 		},
 		Destroy: Destroyer{
-			Age:      "44d",
-			Endpoint: "http://127.0.0.1:8888/v1/destroy",
-			Token:    "12345",
+			Age:          "44d",
+			Endpoint:     "http://127.0.0.1:8888/v1/destroy",
+			Token:        "12345",
+			EncryptToken: true,
 		},
 		Email: Emailer{
 			Mailserver: "nofilter.thomas.hooker",
@@ -87,8 +92,9 @@ func TestReadConfig(t *testing.T) {
 			"token":    "12345",
 		},
 		Tagging: Tagging{
-			Endpoint: "http://127.0.0.1:8888/v1/servers",
-			Token:    "12345",
+			Endpoint:     "http://127.0.0.1:8888/v1/servers",
+			Token:        "12345",
+			EncryptToken: true,
 		},
 		EncryptionSecret: "54321",
 	}

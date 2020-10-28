@@ -7,6 +7,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Destroyer is the data object for destruction
@@ -19,15 +20,26 @@ type Destroyer struct {
 }
 
 // NewDestroyer creates a new destruction object
-func NewDestroyer(endpoint, token, id, org string) Destroyer {
+func NewDestroyer(endpoint, token, id, org string, encryptToken bool) (Destroyer, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
+
+	t := token
+	if encryptToken {
+		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
+		if err != nil {
+			return Destroyer{}, fmt.Errorf("failed to bcyrpt from password: %s", err)
+		}
+
+		t = string(crytpT)
+	}
+
 	return Destroyer{
 		Endpoint:   endpoint,
-		Token:      token,
+		Token:      t,
 		ResourceID: id,
 		Org:        org,
 		Client:     client,
-	}
+	}, nil
 }
 
 // Destroy destroys the instance by 'DELETE'ing it
