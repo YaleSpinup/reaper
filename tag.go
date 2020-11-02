@@ -28,7 +28,7 @@ func NewTagger(endpoint, token, id, org string, encryptToken bool) (Tagger, erro
 	if encryptToken {
 		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
 		if err != nil {
-			return Tagger{}, fmt.Errorf("failed to bcyrpt from password: %s", err)
+			return Tagger{}, fmt.Errorf("failed to bcrypt from password: %s", err)
 		}
 
 		t = string(crytpT)

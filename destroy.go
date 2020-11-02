@@ -27,7 +27,7 @@ func NewDestroyer(endpoint, token, id, org string, encryptToken bool) (Destroyer
 	if encryptToken {
 		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
 		if err != nil {
-			return Destroyer{}, fmt.Errorf("failed to bcyrpt from password: %s", err)
+			return Destroyer{}, fmt.Errorf("failed to bcrypt from password: %s", err)
 		}
 
 		t = string(crytpT)

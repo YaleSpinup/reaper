@@ -29,7 +29,7 @@ func NewDecommissioner(endpoint, token, id, org string, encryptToken bool) (Deco
 	if encryptToken {
 		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
 		if err != nil {
-			return Decommissioner{}, fmt.Errorf("failed to bcyrpt from password: %s", err)
+			return Decommissioner{}, fmt.Errorf("failed to bcrypt from password: %s", err)
 		}
 
 		t = string(crytpT)
