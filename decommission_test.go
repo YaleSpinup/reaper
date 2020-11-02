@@ -7,12 +7,13 @@ import (
 )
 
 var (
-	testDecomEndpoint   = "http://127.0.0.1/v1/servers"
-	testDecomToken      = "xypdq"
-	testDecomResourceID = "i-abc123"
-	testDecomOrg        = "complaintdept"
-	testDecomClient     = NewMockClient([]byte("ok"), 200)
-	testDecommissioner  = Decommissioner{
+	testDecomEndpoint     = "http://127.0.0.1/v1/servers"
+	testDecomToken        = "xypdq"
+	testDecomResourceID   = "i-abc123"
+	testDecomOrg          = "complaintdept"
+	testDecomEncryptToken = false
+	testDecomClient       = NewMockClient([]byte("ok"), 200)
+	testDecommissioner    = Decommissioner{
 		Endpoint:   testDecomEndpoint,
 		Token:      testDecomToken,
 		ResourceID: testDecomResourceID,
@@ -22,7 +23,11 @@ var (
 )
 
 func TestNewDecommissioner(t *testing.T) {
-	actual := NewDecommissioner(testDecomEndpoint, testDecomToken, testDecomResourceID, testDecomOrg)
+	actual, err := NewDecommissioner(testDecomEndpoint, testDecomToken, testDecomResourceID, testDecomOrg, testDecomEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new decommissioner, got %s", err)
+	}
+
 	actual.Client = testDecomClient
 
 	if !reflect.DeepEqual(testDecommissioner, actual) {
@@ -31,7 +36,10 @@ func TestNewDecommissioner(t *testing.T) {
 }
 
 func TestSetStatus(t *testing.T) {
-	decom := NewDecommissioner(testDecomEndpoint, testDecomToken, testDecomResourceID, testDecomOrg)
+	decom, err := NewDecommissioner(testDecomEndpoint, testDecomToken, testDecomResourceID, testDecomOrg, testDecomEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new decommissioner, got %s", err)
+	}
 
 	successClient := NewMockClient([]byte("ok"), 200)
 	successClient.Method = http.MethodPut
@@ -42,7 +50,7 @@ func TestSetStatus(t *testing.T) {
 	}
 
 	decom.Client = successClient
-	err := decom.SetStatus()
+	err = decom.SetStatus()
 	if err != nil {
 		t.Error("Expected successful decom, got", err)
 	}

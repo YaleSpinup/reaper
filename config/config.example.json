@@ -24,16 +24,19 @@
   "decommission": {
     "age": "30d",
     "endpoint": "http://127.0.0.1:8888/v1/servers",
-    "token": "12345"
+    "token": "12345",
+    "encryptToken": true
   },
   "destroy": {
     "age": "44d",
     "endpoint": "http://127.0.0.1:8888/v1/destroy",
-    "token": "12345"
+    "token": "12345",
+    "encryptToken": true
   },
   "tagging": {
     "endpoint": "http://127.0.0.1:8888/v1/servers",
-    "token": "12345"
+    "token": "12345",
+    "encryptToken": true
   },
   "eventReporters": {
     "slack": {

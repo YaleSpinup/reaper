@@ -24,16 +24,19 @@
   "decommission": {
     "age": "{{ .api_decommission_age }}",
     "endpoint": "{{ .api_decommission_endpoint }}",
-    "token": "{{ .api_decommission_token }}"
+    "token": "{{ .api_decommission_token }}",
+    "encryptToken": true
   },
   "destroy": {
     "age": "{{ .api_destroy_age }}",
     "endpoint": "{{ .api_destroy_endpoint }}",
-    "token": "{{ .api_destroy_token }}"
+    "token": "{{ .api_destroy_token }}",
+    "encryptToken": true
   },
   "tagging": {
     "endpoint": "{{ .api_tagging_endpoint }}",
-    "token": "{{ .api_tagging_token }}"
+    "token": "{{ .api_tagging_token }}",
+    "encryptToken": true
   },
   "eventReporters": {
     "slack": {

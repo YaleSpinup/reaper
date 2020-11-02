@@ -329,7 +329,14 @@ func RenewalHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org)
+	tagger, err := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, id, resource.Org, AppConfig.Tagging.EncryptToken)
+	if err != nil {
+		log.Errorf("Failed to renew resource %s, %s", id, err.Error())
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Unable to process renewal, please try again later."))
+		return
+	}
+
 	newRenewedAt := time.Now().Format("2006/01/02 15:04:05")
 	if err = tagger.Tag(map[string]string{"yale:renewed_at": newRenewedAt}); err != nil {
 		log.Errorf("Failed to renew resource %s, %s", id, err.Error())
@@ -580,7 +587,14 @@ func sendNotification(resource *search.Resource, renewalLink string, renewedAt t
 	}
 
 	// tag the instance with the new notification date
-	tagger := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, resource.ID, resource.Org)
+	tagger, err := NewTagger(AppConfig.Tagging.Endpoint, AppConfig.Tagging.Token, resource.ID, resource.Org, AppConfig.Tagging.EncryptToken)
+	if err != nil {
+		msg := fmt.Sprintf("Unable to update tag for %s (%s)", resource.FQDN, resource.ID)
+		log.Error(msg + ": " + err.Error())
+		reportEvent("FAILED"+msg, report.ERROR)
+		return err
+	}
+
 	err = tagger.Tag(map[string]string{
 		"yale:notified_at": time.Now().Format("2006/01/02 15:04:05"),
 	})
@@ -704,7 +718,15 @@ func decommission(finder search.Finder) {
 		log.Infof("%s has crossed the decommision threshold. (Destruction scheduled: %s)", resource.ID, destroyAt.String())
 
 		reportEvent(fmt.Sprintf("Decommissioning for %s (%s)", resource.FQDN, resource.ID), report.INFO)
-		err = NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, resource.ID, resource.Org).SetStatus()
+
+		decommer, err := NewDecommissioner(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, resource.ID, resource.Org, AppConfig.Decommission.EncryptToken)
+		if err != nil {
+			reportEvent(fmt.Sprintf("FAILED to decommission for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+			log.Errorf("Unable to decommission %s, %s", resource.ID, err.Error())
+			continue
+		}
+
+		decommer.SetStatus()
 		if err != nil {
 			reportEvent(fmt.Sprintf("FAILED to decommission for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
 			log.Errorf("Unable to decommission %s, %s", resource.ID, err.Error())
@@ -803,7 +825,15 @@ func destroy(finder search.Finder) {
 		log.Infof("%s has crossed the destruction threshold.", resource.ID)
 
 		reportEvent(fmt.Sprintf("Destroying for %s (%s)", resource.FQDN, resource.ID), report.INFO)
-		err = NewDestroyer(AppConfig.Decommission.Endpoint, AppConfig.Decommission.Token, resource.ID, resource.Org).Destroy()
+
+		destroyer, err := NewDestroyer(AppConfig.Destroy.Endpoint, AppConfig.Destroy.Token, resource.ID, resource.Org, AppConfig.Destroy.EncryptToken)
+		if err != nil {
+			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
+			log.Errorf("Unable to destroy %s, %s", resource.ID, err.Error())
+			continue
+		}
+
+		err = destroyer.Destroy()
 		if err != nil {
 			reportEvent(fmt.Sprintf("FAILED to destroy for %s (%s)", resource.FQDN, resource.ID), report.ERROR)
 			log.Errorf("Unable to destroy %s, %s", resource.ID, err.Error())

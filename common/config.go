@@ -41,29 +41,33 @@ type Emailer struct {
 
 // Notifier configures the notification process
 type Notifier struct {
-	Age      []string
-	Endpoint string
-	Token    string
+	Age          []string
+	Endpoint     string
+	Token        string
+	EncryptToken bool
 }
 
 // Destroyer configures the deletion process
 type Destroyer struct {
-	Age      string
-	Endpoint string
-	Token    string
+	Age          string
+	Endpoint     string
+	Token        string
+	EncryptToken bool
 }
 
 // Decommissioner configures the decom process
 type Decommissioner struct {
-	Age      string
-	Endpoint string
-	Token    string
+	Age          string
+	Endpoint     string
+	Token        string
+	EncryptToken bool
 }
 
 // Tagging configures the tag update process
 type Tagging struct {
-	Endpoint string
-	Token    string
+	Endpoint     string
+	Token        string
+	EncryptToken bool
 }
 
 // Webhook configures the webhook endpoints

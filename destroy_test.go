@@ -7,12 +7,13 @@ import (
 )
 
 var (
-	testDestroyEndpoint   = "http://127.0.0.1/v1/servers"
-	testDestroyToken      = "xypdq"
-	testDestroyResourceID = "i-abc123"
-	testDestroyOrg        = "complaintdept"
-	testDestroyClient     = NewMockClient([]byte("ok"), 200)
-	testDestroyer         = Destroyer{
+	testDestroyEndpoint     = "http://127.0.0.1/v1/servers"
+	testDestroyToken        = "xypdq"
+	testDestroyResourceID   = "i-abc123"
+	testDestroyOrg          = "complaintdept"
+	testDestroyEncryptToken = false
+	testDestroyClient       = NewMockClient([]byte("ok"), 200)
+	testDestroyer           = Destroyer{
 		Endpoint:   testDestroyEndpoint,
 		Token:      testDestroyToken,
 		ResourceID: testDestroyResourceID,
@@ -22,7 +23,11 @@ var (
 )
 
 func TestNewDestroyer(t *testing.T) {
-	actual := NewDestroyer(testDestroyEndpoint, testDestroyToken, testDestroyResourceID, testDestroyOrg)
+	actual, err := NewDestroyer(testDestroyEndpoint, testDestroyToken, testDestroyResourceID, testDestroyOrg, testDestroyEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new destroyer, got %s", err)
+	}
+
 	actual.Client = testDestroyClient
 
 	if !reflect.DeepEqual(testDestroyer, actual) {
@@ -31,7 +36,10 @@ func TestNewDestroyer(t *testing.T) {
 }
 
 func TestDestroy(t *testing.T) {
-	destroyerofworlds := NewDestroyer(testDestroyEndpoint, testDestroyToken, testDestroyResourceID, testDestroyOrg)
+	destroyerofworlds, err := NewDestroyer(testDestroyEndpoint, testDestroyToken, testDestroyResourceID, testDestroyOrg, testDestroyEncryptToken)
+	if err != nil {
+		t.Errorf("Expected nil error for new destroyer, got %s", err)
+	}
 
 	successClient := NewMockClient([]byte("ok"), 200)
 	successClient.Method = http.MethodDelete
@@ -42,7 +50,7 @@ func TestDestroy(t *testing.T) {
 	}
 
 	destroyerofworlds.Client = successClient
-	err := destroyerofworlds.Destroy()
+	err = destroyerofworlds.Destroy()
 	if err != nil {
 		t.Error("Expected successful destruction, got", err)
 	}

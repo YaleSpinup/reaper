@@ -8,6 +8,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Tagger is the data object for tagging
@@ -20,15 +21,26 @@ type Tagger struct {
 }
 
 // NewTagger creates a new tagging object
-func NewTagger(endpoint, token, id, org string) Tagger {
+func NewTagger(endpoint, token, id, org string, encryptToken bool) (Tagger, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
+
+	t := token
+	if encryptToken {
+		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
+		if err != nil {
+			return Tagger{}, fmt.Errorf("failed to bcrypt from password: %s", err)
+		}
+
+		t = string(crytpT)
+	}
+
 	return Tagger{
 		Endpoint:   endpoint,
-		Token:      token,
+		Token:      t,
 		ResourceID: id,
 		Org:        org,
 		Client:     client,
-	}
+	}, nil
 }
 
 // Tag updates the tags

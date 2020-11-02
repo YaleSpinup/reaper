@@ -8,27 +8,40 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Decommissioner is the data object for decommissioning
 type Decommissioner struct {
-	Endpoint   string
-	Token      string
-	ResourceID string
-	Org        string
-	Client     HTTPClient
+	Endpoint     string
+	Token        string
+	EncryptToken bool
+	ResourceID   string
+	Org          string
+	Client       HTTPClient
 }
 
 // NewDecommissioner creates a new decommissioning object
-func NewDecommissioner(endpoint, token, id, org string) Decommissioner {
+func NewDecommissioner(endpoint, token, id, org string, encryptToken bool) (Decommissioner, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
+
+	t := token
+	if encryptToken {
+		crytpT, err := bcrypt.GenerateFromPassword([]byte(token), 4)
+		if err != nil {
+			return Decommissioner{}, fmt.Errorf("failed to bcrypt from password: %s", err)
+		}
+
+		t = string(crytpT)
+	}
+
 	return Decommissioner{
 		Endpoint:   endpoint,
-		Token:      token,
+		Token:      t,
 		ResourceID: id,
 		Org:        org,
 		Client:     client,
-	}
+	}, nil
 }
 
 // SetStatus decommissions the instance by 'PUT'ing a new status to it
