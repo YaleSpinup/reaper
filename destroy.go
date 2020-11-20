@@ -55,7 +55,7 @@ func (d Destroyer) Destroy() error {
 	}
 
 	req.Header.Set("X-Forwarded-User", "reaper")
-	req.Header.Set("Auth-token", d.Token)
+	req.Header.Set("X-Auth-Token", d.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := d.Client.Do(req)
 	if err != nil {

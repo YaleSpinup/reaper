@@ -45,7 +45,7 @@ func TestDestroy(t *testing.T) {
 	successClient.Method = http.MethodDelete
 	successClient.HeaderMap = map[string]string{
 		"X-Forwarded-User": "reaper",
-		"Auth-token":       testDestroyToken,
+		"X-Auth-Token":     testDestroyToken,
 		"Content-Type":     "application/json",
 	}
 

@@ -50,7 +50,7 @@ func TestTag(t *testing.T) {
 	successClient.Method = http.MethodPut
 	successClient.HeaderMap = map[string]string{
 		"X-Forwarded-User": "reaper",
-		"Auth-token":       testTagToken,
+		"X-Auth-Token":     testTagToken,
 		"Content-Type":     "application/json",
 	}
 
