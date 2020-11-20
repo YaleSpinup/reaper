@@ -45,7 +45,7 @@ func TestSetStatus(t *testing.T) {
 	successClient.Method = http.MethodPut
 	successClient.HeaderMap = map[string]string{
 		"X-Forwarded-User": "reaper",
-		"Auth-token":       testDecomToken,
+		"X-Auth-token":     testDecomToken,
 		"Content-Type":     "application/json",
 	}
 
