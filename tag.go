@@ -67,7 +67,7 @@ func (t Tagger) Tag(tags map[string]string) error {
 	}
 
 	req.Header.Set("X-Forwarded-User", "reaper")
-	req.Header.Set("Auth-token", t.Token)
+	req.Header.Set("X-Auth-token", t.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := t.Client.Do(req)
 	if err != nil {

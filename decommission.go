@@ -68,7 +68,7 @@ func (d Decommissioner) SetStatus() error {
 	}
 
 	req.Header.Set("X-Forwarded-User", "reaper")
-	req.Header.Set("Auth-token", d.Token)
+	req.Header.Set("X-Auth-token", d.Token)
 	req.Header.Set("Content-Type", "application/json")
 	res, err := d.Client.Do(req)
 	if err != nil {
