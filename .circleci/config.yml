@@ -1,12 +1,12 @@
-version: 2
+version: 2.1
+
 jobs:
   build:
     docker:
-      - image: cimg/go
+      - image: cimg/go:1.18
 
     environment:
       TEST_RESULTS: /tmp/test-results
-      GO111MODULE: "on"
 
     steps:
       - checkout
