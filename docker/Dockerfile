@@ -1,5 +1,5 @@
 # build stage
-FROM golang:alpine AS build-env
+FROM golang:alpine3.18 AS build-env
 
 ARG version="0.0.0"
 ARG prerelease=""
@@ -28,7 +28,7 @@ RUN chmod 555 /app/api
 RUN apk add --no-cache bash ca-certificates tzdata
 
 # Install Deco
-ARG DECO_VERSION=1.3.0
+ARG DECO_VERSION=1.4.1
 ARG DECO_OS=linux
 ARG DECO_ARCH=amd64
 ADD https://github.com/YaleUniversity/deco/releases/download/v${DECO_VERSION}/deco_${DECO_VERSION}_${DECO_OS}_${DECO_ARCH}.tar.gz /usr/local/bin/deco.tar.gz
