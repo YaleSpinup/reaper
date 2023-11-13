@@ -1,5 +1,5 @@
 # build stage
-FROM golang:alpine AS build-env
+FROM golang:alpine3.18 AS build-env
 RUN apk add --no-cache git openssh-client gcc musl-dev
 RUN mkdir /app
 WORKDIR /app
